@@ -168,11 +168,283 @@ app.get('/dashboard', requireAuth(), (req, res) => {
             total_web_users: 0
         };
         
-        res.render('dashboard', { 
-            user: req.session.user, 
-            stats: data,
-            title: 'Dashboard - 14th Squad Management'
+        // Korrigierte Aktivitäten Query - ohne ORDER BY in UNION Subqueries
+        const activitiesQuery = `
+            SELECT 
+                'message' as type,
+                username as actor,
+                channel_name as target,
+                content as details,
+                timestamp,
+                'fas fa-comment' as icon,
+                'info' as color
+            FROM message_logs 
+            WHERE user_id != 'SYSTEM' 
+                AND content IS NOT NULL 
+                AND content != ''
+            
+            UNION ALL
+            
+            SELECT 
+                'system_message' as type,
+                username as actor,
+                channel_name as target,
+                content as details,
+                timestamp,
+                'fas fa-cog' as icon,
+                'warning' as color
+            FROM message_logs 
+            WHERE user_id = 'SYSTEM'
+            
+            UNION ALL
+            
+            SELECT 
+                'ticket_created' as type,
+                (SELECT username FROM users WHERE id = tickets.user_id) as actor,
+                ticket_id as target,
+                'Ticket erstellt' as details,
+                created_at as timestamp,
+                'fas fa-ticket-alt' as icon,
+                'success' as color
+            FROM tickets
+            
+            UNION ALL
+            
+            SELECT 
+                'ticket_closed' as type,
+                'System' as actor,
+                ticket_id as target,
+                'Ticket geschlossen' as details,
+                closed_at as timestamp,
+                'fas fa-lock' as icon,
+                'danger' as color
+            FROM tickets 
+            WHERE status = 'closed' 
+                AND closed_at IS NOT NULL
+            
+            UNION ALL
+            
+            SELECT 
+                'user_verified' as type,
+                username as actor,
+                'Server' as target,
+                'Erfolgreich verifiziert' as details,
+                joined_at as timestamp,
+                'fas fa-user-check' as icon,
+                'success' as color
+            FROM users 
+            WHERE verified = 1
+            
+            UNION ALL
+            
+            SELECT 
+                'user_joined' as type,
+                username as actor,
+                'Server' as target,
+                'Ist dem Server beigetreten' as details,
+                joined_at as timestamp,
+                'fas fa-user-plus' as icon,
+                'primary' as color
+            FROM users
+            
+            UNION ALL
+            
+            SELECT 
+                'web_activity' as type,
+                COALESCE(wu.username, 'Unbekannt') as actor,
+                wl.action as target,
+                wl.details as details,
+                wl.timestamp,
+                'fas fa-globe' as icon,
+                'secondary' as color
+            FROM web_logs wl
+            LEFT JOIN web_users wu ON wl.user_id = wu.id
+            WHERE wl.action NOT IN ('LOGIN', 'LOGOUT')
+            
+            ORDER BY timestamp DESC
+            LIMIT 10
+        `;
+        
+        db.all(activitiesQuery, (err, activities) => {
+            if (err) {
+                console.error('Activities query error:', err);
+                activities = [];
+            }
+            
+            // Aktivitäten verarbeiten und formatieren
+            const formattedActivities = (activities || []).map(activity => {
+                const timeAgo = getTimeAgo(activity.timestamp);
+                
+                // Aktivitätstext basierend auf Typ formatieren
+                let activityText = '';
+                switch(activity.type) {
+                    case 'message':
+                        const shortContent = activity.details && activity.details.length > 50 
+                            ? activity.details.substring(0, 50) + '...' 
+                            : activity.details || '[Keine Nachricht]';
+                        activityText = `${activity.actor} schrieb in #${activity.target}: "${shortContent}"`;
+                        break;
+                    case 'system_message':
+                        activityText = `System: ${activity.details || 'System-Nachricht'}`;
+                        break;
+                    case 'ticket_created':
+                        activityText = `${activity.actor || 'Unbekannter Benutzer'} erstellte Ticket ${activity.target}`;
+                        break;
+                    case 'ticket_closed':
+                        activityText = `Ticket ${activity.target} wurde geschlossen`;
+                        break;
+                    case 'user_verified':
+                        activityText = `${activity.actor} wurde verifiziert`;
+                        break;
+                    case 'user_joined':
+                        activityText = `${activity.actor} ist dem Server beigetreten`;
+                        break;
+                    case 'web_activity':
+                        activityText = `${activity.actor}: ${activity.target} - ${activity.details || 'Web-Aktivität'}`;
+                        break;
+                    default:
+                        activityText = `${activity.actor || 'Unbekannt'}: ${activity.details || 'Aktivität'}`;
+                }
+                
+                return {
+                    type: activity.type,
+                    icon: activity.icon,
+                    color: activity.color,
+                    text: activityText,
+                    actor: activity.actor,
+                    target: activity.target,
+                    time: timeAgo,
+                    timestamp: activity.timestamp
+                };
+            });
+            
+            res.render('dashboard', { 
+                user: req.session.user, 
+                stats: data,
+                activities: formattedActivities,
+                title: 'Dashboard - 14th Squad Management'
+            });
         });
+    });
+});
+
+function getTimeAgo(timestamp) {
+    if (!timestamp) return 'Unbekannt';
+    
+    const now = new Date();
+    const time = new Date(timestamp);
+    
+    // Überprüfe ob timestamp gültig ist
+    if (isNaN(time.getTime())) {
+        return 'Unbekannt';
+    }
+    
+    const diffInSeconds = Math.floor((now - time) / 1000);
+    
+    if (diffInSeconds < 60) {
+        return 'vor wenigen Sekunden';
+    } else if (diffInSeconds < 3600) {
+        const minutes = Math.floor(diffInSeconds / 60);
+        return `vor ${minutes} Minute${minutes !== 1 ? 'n' : ''}`;
+    } else if (diffInSeconds < 86400) {
+        const hours = Math.floor(diffInSeconds / 3600);
+        return `vor ${hours} Stunde${hours !== 1 ? 'n' : ''}`;
+    } else if (diffInSeconds < 604800) {
+        const days = Math.floor(diffInSeconds / 86400);
+        return `vor ${days} Tag${days !== 1 ? 'en' : ''}`;
+    } else {
+        return time.toLocaleDateString('de-DE');
+    }
+}
+
+app.get('/api/dashboard/activities', requireAuth(), (req, res) => {
+    const limit = parseInt(req.query.limit) || 10;
+    
+    // Einfachere Query für die API
+    const activitiesQuery = `
+        SELECT 
+            'message' as type,
+            username as actor,
+            channel_name as target,
+            content as details,
+            timestamp,
+            'fas fa-comment' as icon,
+            'info' as color
+        FROM message_logs 
+        WHERE user_id != 'SYSTEM' 
+            AND content IS NOT NULL 
+            AND content != ''
+            AND timestamp IS NOT NULL
+        
+        UNION ALL
+        
+        SELECT 
+            'ticket_created' as type,
+            (SELECT username FROM users WHERE id = tickets.user_id) as actor,
+            ticket_id as target,
+            'Ticket erstellt' as details,
+            created_at as timestamp,
+            'fas fa-ticket-alt' as icon,
+            'success' as color
+        FROM tickets
+        WHERE created_at IS NOT NULL
+        
+        UNION ALL
+        
+        SELECT 
+            'user_verified' as type,
+            username as actor,
+            'Server' as target,
+            'Erfolgreich verifiziert' as details,
+            joined_at as timestamp,
+            'fas fa-user-check' as icon,
+            'success' as color
+        FROM users 
+        WHERE verified = 1 
+            AND joined_at IS NOT NULL
+        
+        ORDER BY timestamp DESC
+        LIMIT ?
+    `;
+    
+    db.all(activitiesQuery, [limit], (err, activities) => {
+        if (err) {
+            console.error('Activities API error:', err);
+            return res.status(500).json({ error: 'Fehler beim Laden der Aktivitäten' });
+        }
+        
+        const formattedActivities = (activities || []).map(activity => {
+            const timeAgo = getTimeAgo(activity.timestamp);
+            
+            let activityText = '';
+            switch(activity.type) {
+                case 'message':
+                    const shortContent = activity.details && activity.details.length > 50 
+                        ? activity.details.substring(0, 50) + '...' 
+                        : activity.details || '[Keine Nachricht]';
+                    activityText = `${activity.actor} schrieb in #${activity.target}: "${shortContent}"`;
+                    break;
+                case 'ticket_created':
+                    activityText = `${activity.actor || 'Unbekannter Benutzer'} erstellte Ticket ${activity.target}`;
+                    break;
+                case 'user_verified':
+                    activityText = `${activity.actor} wurde verifiziert`;
+                    break;
+                default:
+                    activityText = `${activity.actor || 'Unbekannt'}: ${activity.details || 'Aktivität'}`;
+            }
+            
+            return {
+                type: activity.type,
+                icon: activity.icon,
+                color: activity.color,
+                text: activityText,
+                time: timeAgo,
+                timestamp: activity.timestamp
+            };
+        });
+        
+        res.json({ activities: formattedActivities });
     });
 });
 
@@ -231,11 +503,12 @@ app.get('/messages', requireAuth(), (req, res) => {
             logWebAction(req.session.user.id, 'VIEW_MESSAGES', 
                 `Seite ${page}, Suche: ${search}, Channel: ${channel}`);
             
+            // WICHTIG: Übergebe alle benötigten Variablen an das Template
             res.render('messages', { 
                 user: req.session.user,
                 messages: messages || [],
                 search,
-                channel,
+                channel, // Diese Variable wird im Template verwendet
                 currentPage: page,
                 totalPages,
                 hasNext: page < totalPages,

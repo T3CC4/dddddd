@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Collection, ChannelType, PermissionsBitField, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, ChannelType, PermissionsBitField, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags } = require('discord.js');
 const sqlite3 = require('sqlite3').verbose();
 const crypto = require('crypto');
 const CONFIG = require('./config.js');
@@ -381,12 +381,18 @@ client.on('interactionCreate', async (interaction) => {
         const channel = interaction.guild.channels.cache.get(channelId);
         
         if (!channel || !tempChannels.has(channelId)) {
-            return interaction.reply({ content: '❌ Channel nicht gefunden oder nicht berechtigt!', ephemeral: true });
+            return interaction.reply({ 
+                content: '❌ Channel nicht gefunden oder nicht berechtigt!', 
+                flags: MessageFlags.Ephemeral 
+            });
         }
         
         const channelData = tempChannels.get(channelId);
         if (channelData.owner !== interaction.user.id) {
-            return interaction.reply({ content: '❌ Nur der Channel-Owner kann diese Aktion ausführen!', ephemeral: true });
+            return interaction.reply({ 
+                content: '❌ Nur der Channel-Owner kann diese Aktion ausführen!', 
+                flags: MessageFlags.Ephemeral 
+            });
         }
         
         try {
@@ -395,21 +401,30 @@ client.on('interactionCreate', async (interaction) => {
                     await channel.permissionOverwrites.edit(interaction.guild.id, {
                         Connect: false
                     });
-                    await interaction.reply({ content: '🔒 Voice Channel wurde gesperrt!', ephemeral: true });
+                    await interaction.reply({ 
+                        content: '🔒 Voice Channel wurde gesperrt!', 
+                        flags: MessageFlags.Ephemeral 
+                    });
                     break;
                 
                 case 'unlock':
                     await channel.permissionOverwrites.edit(interaction.guild.id, {
                         Connect: null
                     });
-                    await interaction.reply({ content: '🔓 Voice Channel wurde entsperrt!', ephemeral: true });
+                    await interaction.reply({ 
+                        content: '🔓 Voice Channel wurde entsperrt!', 
+                        flags: MessageFlags.Ephemeral 
+                    });
                     break;
                 
                 case 'invisible':
                     await channel.permissionOverwrites.edit(interaction.guild.id, {
                         ViewChannel: false
                     });
-                    await interaction.reply({ content: '👻 Voice Channel ist jetzt unsichtbar!', ephemeral: true });
+                    await interaction.reply({ 
+                        content: '👻 Voice Channel ist jetzt unsichtbar!', 
+                        flags: MessageFlags.Ephemeral 
+                    });
                     break;
                 
                 case 'limit':
@@ -458,19 +473,79 @@ client.on('interactionCreate', async (interaction) => {
                     await channel.delete();
                     tempChannels.delete(channelId);
                     db.run(`DELETE FROM temp_channels WHERE channel_id = ?`, [channelId]);
-                    await interaction.reply({ content: '🗑️ Voice Channel wurde gelöscht!', ephemeral: true });
+                    await interaction.reply({ 
+                        content: '🗑️ Voice Channel wurde gelöscht!', 
+                        flags: MessageFlags.Ephemeral 
+                    });
                     break;
             }
         } catch (error) {
             console.error('❌ Voice Control Error:', error);
-            await interaction.reply({ content: '❌ Fehler bei der Ausführung!', ephemeral: true });
+            await interaction.reply({ 
+                content: '❌ Fehler bei der Ausführung!', 
+                flags: MessageFlags.Ephemeral 
+            });
         }
     }
     
     // Ticket schließen Button
     if (customId === 'close_ticket') {
-        // Ticket schließen Logik hier...
-        await interaction.reply({ content: '🔒 Ticket wird geschlossen...', ephemeral: true });
+        // Führe das Ticket schließen aus
+        const channel = interaction.channel;
+        
+        db.get(`SELECT * FROM tickets WHERE channel_id = ? AND status = 'open'`, [channel.id], async (err, ticket) => {
+            if (err) {
+                console.error('Database error:', err);
+                await interaction.reply({ 
+                    content: '❌ Datenbankfehler aufgetreten!', 
+                    flags: MessageFlags.Ephemeral 
+                });
+                return;
+            }
+            
+            if (ticket) {
+                try {
+                    // Erstelle Transcript vor dem Schließen
+                    const messages = await channel.messages.fetch({ limit: 100 });
+                    const transcript = messages.reverse().map(msg => ({
+                        username: msg.author.username,
+                        content: msg.content,
+                        timestamp: msg.createdAt.toISOString()
+                    }));
+                    
+                    // Update Ticket in Datenbank
+                    db.run(`UPDATE tickets SET status = 'closed', closed_at = ?, transcript = ? WHERE ticket_id = ?`,
+                        [new Date().toISOString(), JSON.stringify(transcript), ticket.ticket_id]
+                    );
+                    
+                    await interaction.reply({ 
+                        content: '🔒 **Ticket wird geschlossen...** Transcript wurde gespeichert.' 
+                    });
+                    
+                    // Lösche Channel nach 5 Sekunden
+                    setTimeout(async () => {
+                        try {
+                            await channel.delete();
+                        } catch (deleteError) {
+                            console.error('❌ Fehler beim Löschen des Channels:', deleteError);
+                        }
+                    }, 5000);
+                    
+                    console.log(`🔒 Ticket geschlossen: ${ticket.ticket_id}`);
+                } catch (error) {
+                    console.error('❌ Fehler beim Schließen des Tickets:', error);
+                    await interaction.reply({ 
+                        content: '❌ Fehler beim Schließen des Tickets.', 
+                        flags: MessageFlags.Ephemeral 
+                    });
+                }
+            } else {
+                await interaction.reply({ 
+                    content: '❌ Dies ist kein offenes Ticket oder du hast keine Berechtigung!', 
+                    flags: MessageFlags.Ephemeral 
+                });
+            }
+        });
     }
 });
 
@@ -486,10 +561,23 @@ client.on('interactionCreate', async (interaction) => {
         const limit = parseInt(interaction.fields.getTextInputValue('limit_input'));
         
         if (channel && tempChannels.has(channelId)) {
-            await channel.setUserLimit(limit);
+            try {
+                await channel.setUserLimit(limit);
+                await interaction.reply({ 
+                    content: `👥 Benutzer-Limit auf ${limit === 0 ? 'unbegrenzt' : limit} gesetzt!`, 
+                    flags: MessageFlags.Ephemeral 
+                });
+            } catch (error) {
+                console.error('❌ Fehler beim Setzen des Limits:', error);
+                await interaction.reply({ 
+                    content: '❌ Fehler beim Setzen des Limits!', 
+                    flags: MessageFlags.Ephemeral 
+                });
+            }
+        } else {
             await interaction.reply({ 
-                content: `👥 Benutzer-Limit auf ${limit === 0 ? 'unbegrenzt' : limit} gesetzt!`, 
-                ephemeral: true 
+                content: '❌ Channel nicht gefunden!', 
+                flags: MessageFlags.Ephemeral 
             });
         }
     }
@@ -500,10 +588,23 @@ client.on('interactionCreate', async (interaction) => {
         const newName = interaction.fields.getTextInputValue('name_input');
         
         if (channel && tempChannels.has(channelId)) {
-            await channel.setName(newName);
+            try {
+                await channel.setName(newName);
+                await interaction.reply({ 
+                    content: `✏️ Channel wurde zu "${newName}" umbenannt!`, 
+                    flags: MessageFlags.Ephemeral 
+                });
+            } catch (error) {
+                console.error('❌ Fehler beim Umbenennen:', error);
+                await interaction.reply({ 
+                    content: '❌ Fehler beim Umbenennen!', 
+                    flags: MessageFlags.Ephemeral 
+                });
+            }
+        } else {
             await interaction.reply({ 
-                content: `✏️ Channel wurde zu "${newName}" umbenannt!`, 
-                ephemeral: true 
+                content: '❌ Channel nicht gefunden!', 
+                flags: MessageFlags.Ephemeral 
             });
         }
     }
@@ -522,6 +623,15 @@ client.on('interactionCreate', async (interaction) => {
             db.get(`SELECT * FROM users WHERE id = ? AND verification_code = ?`, 
                 [interaction.user.id, code], 
                 async (err, row) => {
+                    if (err) {
+                        console.error('Database error:', err);
+                        await interaction.reply({ 
+                            content: '❌ Datenbankfehler aufgetreten!', 
+                            flags: MessageFlags.Ephemeral 
+                        });
+                        return;
+                    }
+                    
                     if (row && !row.verified) {
                         // Verifiziere Benutzer
                         db.run(`UPDATE users SET verified = 1 WHERE id = ?`, [interaction.user.id]);
@@ -531,22 +641,29 @@ client.on('interactionCreate', async (interaction) => {
                             await interaction.member.roles.add(role);
                         }
                         
-                        // Lösche persönlichen Channel
-                        const personalChannel = interaction.guild.channels.cache.get(row.personal_channel_id);
-                        if (personalChannel) {
-                            await personalChannel.delete();
+                        // Lösche persönlichen Channel (mit Fehlerbehandlung)
+                        if (row.personal_channel_id) {
+                            try {
+                                const personalChannel = await interaction.guild.channels.fetch(row.personal_channel_id);
+                                if (personalChannel) {
+                                    await personalChannel.delete();
+                                }
+                            } catch (channelError) {
+                                console.log(`⚠️ Persönlicher Channel ${row.personal_channel_id} nicht gefunden oder bereits gelöscht`);
+                                // Channel existiert nicht mehr, das ist okay
+                            }
                         }
                         
                         await interaction.reply({ 
                             content: '✅ **Erfolgreich verifiziert!** Willkommen bei 14th Squad!', 
-                            ephemeral: true 
+                            flags: MessageFlags.Ephemeral 
                         });
                         
                         console.log(`✅ Benutzer verifiziert: ${interaction.user.username}`);
                     } else {
                         await interaction.reply({ 
                             content: '❌ Ungültiger Code oder bereits verifiziert!', 
-                            ephemeral: true 
+                            flags: MessageFlags.Ephemeral 
                         });
                     }
                 }
@@ -557,59 +674,67 @@ client.on('interactionCreate', async (interaction) => {
             const grund = interaction.options.getString('grund');
             const ticketId = `ticket-${Date.now()}`;
             
-            const ticketChannel = await interaction.guild.channels.create({
-                name: ticketId,
-                type: ChannelType.GuildText,
-                parent: CONFIG.TICKET_CATEGORY,
-                permissionOverwrites: [
-                    {
-                        id: interaction.guild.id,
-                        deny: [PermissionsBitField.Flags.ViewChannel],
-                    },
-                    {
-                        id: interaction.user.id,
-                        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
-                    },
-                    {
-                        id: CONFIG.MOD_ROLE,
-                        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
-                    },
-                    {
-                        id: CONFIG.ADMIN_ROLE,
-                        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
-                    },
-                ],
-            });
-            
-            const embed = new EmbedBuilder()
-                .setTitle('🎫 14th Squad Support Ticket')
-                .setDescription(`**Erstellt von:** ${interaction.user}\n**Grund:** ${grund}`)
-                .setColor('#ff0066')
-                .setThumbnail(interaction.user.displayAvatarURL())
-                .setFooter({ text: '14th Squad • Support System' })
-                .setTimestamp();
-            
-            const closeButton = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('close_ticket')
-                        .setLabel('🔒 Ticket schließen')
-                        .setStyle(ButtonStyle.Danger)
+            try {
+                const ticketChannel = await interaction.guild.channels.create({
+                    name: ticketId,
+                    type: ChannelType.GuildText,
+                    parent: CONFIG.TICKET_CATEGORY,
+                    permissionOverwrites: [
+                        {
+                            id: interaction.guild.id,
+                            deny: [PermissionsBitField.Flags.ViewChannel],
+                        },
+                        {
+                            id: interaction.user.id,
+                            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
+                        },
+                        {
+                            id: CONFIG.MOD_ROLE,
+                            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
+                        },
+                        {
+                            id: CONFIG.ADMIN_ROLE,
+                            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
+                        },
+                    ],
+                });
+                
+                const embed = new EmbedBuilder()
+                    .setTitle('🎫 14th Squad Support Ticket')
+                    .setDescription(`**Erstellt von:** ${interaction.user}\n**Grund:** ${grund}`)
+                    .setColor('#ff0066')
+                    .setThumbnail(interaction.user.displayAvatarURL())
+                    .setFooter({ text: '14th Squad • Support System' })
+                    .setTimestamp();
+                
+                const closeButton = new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('close_ticket')
+                            .setLabel('🔒 Ticket schließen')
+                            .setStyle(ButtonStyle.Danger)
+                    );
+                
+                await ticketChannel.send({ embeds: [embed], components: [closeButton] });
+                
+                // Speichere Ticket
+                db.run(`INSERT INTO tickets (ticket_id, user_id, channel_id, status, created_at) VALUES (?, ?, ?, ?, ?)`,
+                    [ticketId, interaction.user.id, ticketChannel.id, 'open', new Date().toISOString()]
                 );
-            
-            await ticketChannel.send({ embeds: [embed], components: [closeButton] });
-            
-            // Speichere Ticket
-            db.run(`INSERT INTO tickets (ticket_id, user_id, channel_id, status, created_at) VALUES (?, ?, ?, ?, ?)`,
-                [ticketId, interaction.user.id, ticketChannel.id, 'open', new Date().toISOString()]
-            );
-            
-            await interaction.reply({ 
-                content: `✅ **Ticket erstellt:** ${ticketChannel}`, 
-                ephemeral: true 
-            });
-            
-            console.log(`🎫 Neues Ticket: ${ticketId} von ${interaction.user.username}`);
+                
+                await interaction.reply({ 
+                    content: `✅ **Ticket erstellt:** ${ticketChannel}`, 
+                    flags: MessageFlags.Ephemeral 
+                });
+                
+                console.log(`🎫 Neues Ticket: ${ticketId} von ${interaction.user.username}`);
+            } catch (error) {
+                console.error('❌ Fehler beim Erstellen des Tickets:', error);
+                await interaction.reply({ 
+                    content: '❌ Fehler beim Erstellen des Tickets. Bitte versuche es später erneut.', 
+                    flags: MessageFlags.Ephemeral 
+                });
+            }
         }
         
         if (commandName === 'close-ticket') {
@@ -617,42 +742,77 @@ client.on('interactionCreate', async (interaction) => {
             const channel = interaction.channel;
             
             db.get(`SELECT * FROM tickets WHERE channel_id = ? AND status = 'open'`, [channel.id], async (err, ticket) => {
+                if (err) {
+                    console.error('Database error:', err);
+                    await interaction.reply({ 
+                        content: '❌ Datenbankfehler aufgetreten!', 
+                        flags: MessageFlags.Ephemeral 
+                    });
+                    return;
+                }
+                
                 if (ticket) {
-                    // Erstelle Transcript vor dem Schließen
-                    const messages = await channel.messages.fetch({ limit: 100 });
-                    const transcript = messages.reverse().map(msg => ({
-                        username: msg.author.username,
-                        content: msg.content,
-                        timestamp: msg.createdAt.toISOString()
-                    }));
-                    
-                    // Update Ticket in Datenbank
-                    db.run(`UPDATE tickets SET status = 'closed', closed_at = ?, transcript = ? WHERE ticket_id = ?`,
-                        [new Date().toISOString(), JSON.stringify(transcript), ticket.ticket_id]
-                    );
-                    
-                    await interaction.reply({ content: '🔒 **Ticket wird geschlossen...** Transcript wurde gespeichert.' });
-                    
-                    // Lösche Channel nach 5 Sekunden
-                    setTimeout(async () => {
-                        await channel.delete();
-                    }, 5000);
-                    
-                    console.log(`🔒 Ticket geschlossen: ${ticket.ticket_id}`);
+                    try {
+                        // Erstelle Transcript vor dem Schließen
+                        const messages = await channel.messages.fetch({ limit: 100 });
+                        const transcript = messages.reverse().map(msg => ({
+                            username: msg.author.username,
+                            content: msg.content,
+                            timestamp: msg.createdAt.toISOString()
+                        }));
+                        
+                        // Update Ticket in Datenbank
+                        db.run(`UPDATE tickets SET status = 'closed', closed_at = ?, transcript = ? WHERE ticket_id = ?`,
+                            [new Date().toISOString(), JSON.stringify(transcript), ticket.ticket_id]
+                        );
+                        
+                        await interaction.reply({ 
+                            content: '🔒 **Ticket wird geschlossen...** Transcript wurde gespeichert.' 
+                        });
+                        
+                        // Lösche Channel nach 5 Sekunden
+                        setTimeout(async () => {
+                            try {
+                                await channel.delete();
+                            } catch (deleteError) {
+                                console.error('❌ Fehler beim Löschen des Channels:', deleteError);
+                            }
+                        }, 5000);
+                        
+                        console.log(`🔒 Ticket geschlossen: ${ticket.ticket_id}`);
+                    } catch (error) {
+                        console.error('❌ Fehler beim Schließen des Tickets:', error);
+                        await interaction.reply({ 
+                            content: '❌ Fehler beim Schließen des Tickets.', 
+                            flags: MessageFlags.Ephemeral 
+                        });
+                    }
                 } else {
                     await interaction.reply({ 
                         content: '❌ Dies ist kein offenes Ticket oder du hast keine Berechtigung!', 
-                        ephemeral: true 
+                        flags: MessageFlags.Ephemeral 
                     });
                 }
             });
         }
     } catch (error) {
         console.error('❌ Fehler bei Slash Command:', error);
-        await interaction.reply({ 
-            content: '❌ Ein Fehler ist aufgetreten!', 
-            ephemeral: true 
-        });
+        
+        // Sichere Fehlerbehandlung für Interaction Reply
+        try {
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ 
+                    content: '❌ Ein Fehler ist aufgetreten!', 
+                    flags: MessageFlags.Ephemeral 
+                });
+            } else if (interaction.deferred) {
+                await interaction.editReply({ 
+                    content: '❌ Ein Fehler ist aufgetreten!' 
+                });
+            }
+        } catch (replyError) {
+            console.error('❌ Fehler beim Senden der Fehlerantwort:', replyError);
+        }
     }
 });
 
