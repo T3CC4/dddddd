@@ -1,0 +1,275 @@
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="fas fa-ticket-alt"></i> Ticket Management</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="location.reload()">
+                <i class="fas fa-sync-alt"></i> Aktualisieren
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Statistiken -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-success">
+                    <i class="fas fa-ticket-alt"></i>
+                    <%= tickets.filter(t => t.status === 'open').length %>
+                </h5>
+                <p class="card-text">Offene Tickets</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-danger">
+                    <i class="fas fa-lock"></i>
+                    <%= tickets.filter(t => t.status === 'closed').length %>
+                </h5>
+                <p class="card-text">Geschlossene Tickets</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-info">
+                    <i class="fas fa-list"></i>
+                    <%= tickets.length %>
+                </h5>
+                <p class="card-text">Tickets Gesamt</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label for="statusFilter" class="form-label">Status Filter</label>
+                <select class="form-select" id="statusFilter" onchange="filterTickets()">
+                    <option value="">Alle Tickets</option>
+                    <option value="open">Nur Offene</option>
+                    <option value="closed">Nur Geschlossene</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label for="ticketSearch" class="form-label">Ticket suchen</label>
+                <input type="text" class="form-control" id="ticketSearch" placeholder="Ticket ID oder Benutzer..."
+                       onkeyup="filterTickets()">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tickets Liste -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">
+            Alle Tickets
+            <span class="badge bg-secondary ms-2" id="ticketCount"><%= tickets.length %></span>
+        </h5>
+    </div>
+    <div class="card-body">
+        <% if (tickets.length === 0) { %>
+        <div class="text-center py-4">
+            <i class="fas fa-ticket-alt fa-3x text-muted mb-3"></i>
+            <p class="text-muted">Keine Tickets vorhanden.</p>
+        </div>
+        <% } else { %>
+        
+        <div class="table-responsive">
+            <table class="table table-dark table-hover" id="ticketsTable">
+                <thead>
+                    <tr>
+                        <th>Ticket ID</th>
+                        <th>Benutzer</th>
+                        <th>Status</th>
+                        <th>Erstellt</th>
+                        <th>Geschlossen</th>
+                        <th>Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% tickets.forEach(function(ticket) { %>
+                    <tr class="ticket-row" data-status="<%= ticket.status %>" data-search="<%= ticket.ticket_id %> <%= ticket.username || 'Unbekannt' %>">
+                        <td>
+                            <code><%= ticket.ticket_id %></code>
+                        </td>
+                        <td>
+                            <% if (ticket.username) { %>
+                                <i class="fas fa-user"></i> <%= ticket.username %>
+                            <% } else { %>
+                                <i class="fas fa-user-times text-muted"></i> Unbekannter Benutzer
+                            <% } %>
+                            <br>
+                            <small class="text-muted">ID: <%= ticket.user_id %></small>
+                        </td>
+                        <td>
+                            <% if (ticket.status === 'open') { %>
+                                <span class="badge bg-success">
+                                    <i class="fas fa-unlock"></i> Offen
+                                </span>
+                            <% } else { %>
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-lock"></i> Geschlossen
+                                </span>
+                            <% } %>
+                        </td>
+                        <td>
+                            <small>
+                                <%= new Date(ticket.created_at).toLocaleString('de-DE') %>
+                            </small>
+                        </td>
+                        <td>
+                            <% if (ticket.closed_at) { %>
+                                <small>
+                                    <%= new Date(ticket.closed_at).toLocaleString('de-DE') %>
+                                </small>
+                            <% } else { %>
+                                <span class="text-muted">-</span>
+                            <% } %>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="/tickets/<%= ticket.ticket_id %>" class="btn btn-outline-info">
+                                    <i class="fas fa-eye"></i> Anzeigen
+                                </a>
+                                
+                                <% if (ticket.status === 'open') { %>
+                                <button class="btn btn-outline-danger" onclick="closeTicket('<%= ticket.ticket_id %>')">
+                                    <i class="fas fa-lock"></i> Schließen
+                                </button>
+                                <% } %>
+                                
+                                <% if (ticket.transcript) { %>
+                                <button class="btn btn-outline-success" onclick="downloadTranscript('<%= ticket.ticket_id %>')">
+                                    <i class="fas fa-download"></i> Transcript
+                                </button>
+                                <% } %>
+                            </div>
+                        </td>
+                    </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        </div>
+        
+        <% } %>
+    </div>
+</div>
+
+<!-- Close Ticket Modal -->
+<div class="modal fade" id="closeTicketModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">Ticket schließen</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Bist du sicher, dass du das Ticket <strong id="closeTicketId"></strong> schließen möchtest?</p>
+                <p class="text-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Das Transcript wird automatisch gespeichert und der Discord-Channel wird gelöscht.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-danger" onclick="confirmCloseTicket()">
+                    <i class="fas fa-lock"></i> Ticket schließen
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.ticket-open { background-color: rgba(40, 167, 69, 0.1); }
+.ticket-closed { background-color: rgba(220, 53, 69, 0.1); }
+
+.table-hover tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.075);
+}
+
+.btn-group-sm > .btn {
+    font-size: 0.75rem;
+}
+</style>
+
+<script>
+let ticketToClose = null;
+
+// Filter Funktionen
+function filterTickets() {
+    const statusFilter = document.getElementById('statusFilter').value;
+    const searchTerm = document.getElementById('ticketSearch').value.toLowerCase();
+    const rows = document.querySelectorAll('.ticket-row');
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+        const status = row.getAttribute('data-status');
+        const searchData = row.getAttribute('data-search').toLowerCase();
+        
+        const statusMatch = !statusFilter || status === statusFilter;
+        const searchMatch = !searchTerm || searchData.includes(searchTerm);
+        
+        if (statusMatch && searchMatch) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    document.getElementById('ticketCount').textContent = visibleCount;
+}
+
+// Ticket schließen
+function closeTicket(ticketId) {
+    ticketToClose = ticketId;
+    document.getElementById('closeTicketId').textContent = ticketId;
+    new bootstrap.Modal(document.getElementById('closeTicketModal')).show();
+}
+
+function confirmCloseTicket() {
+    if (!ticketToClose) return;
+    
+    fetch(`/api/tickets/${ticketToClose}/close`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Fehler beim Schließen des Tickets: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Fehler beim Schließen des Tickets');
+    });
+    
+    bootstrap.Modal.getInstance(document.getElementById('closeTicketModal')).hide();
+}
+
+// Transcript downloaden
+function downloadTranscript(ticketId) {
+    // Hier würde der Download implementiert werden
+    alert('Transcript Download für ' + ticketId + ' wird implementiert...');
+}
+
+// Auto-refresh alle 30 Sekunden
+setTimeout(() => {
+    location.reload();
+}, 30000);
+</script>

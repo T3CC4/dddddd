@@ -1,0 +1,396 @@
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-ticket-alt"></i> 
+        Ticket: <code><%= ticket.ticket_id %></code>
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="/tickets" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Zurück
+            </a>
+            <% if (ticket.status === 'open') { %>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="closeTicket()">
+                <i class="fas fa-lock"></i> Schließen
+            </button>
+            <% } %>
+        </div>
+    </div>
+</div>
+
+<!-- Ticket Info -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="fas fa-info-circle"></i> Ticket Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-dark mb-0">
+                    <tbody>
+                        <tr>
+                            <td><strong>Ticket ID:</strong></td>
+                            <td><code><%= ticket.ticket_id %></code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Status:</strong></td>
+                            <td>
+                                <% if (ticket.status === 'open') { %>
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-unlock"></i> Offen
+                                    </span>
+                                <% } else { %>
+                                    <span class="badge bg-danger">
+                                        <i class="fas fa-lock"></i> Geschlossen
+                                    </span>
+                                <% } %>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Benutzer:</strong></td>
+                            <td>
+                                <i class="fas fa-user"></i> <%= ticket.user_id %>
+                                <br><small class="text-muted">ID: <%= ticket.user_id %></small>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Channel ID:</strong></td>
+                            <td><code><%= ticket.channel_id %></code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Erstellt:</strong></td>
+                            <td><%= new Date(ticket.created_at).toLocaleString('de-DE') %></td>
+                        </tr>
+                        <% if (ticket.closed_at) { %>
+                        <tr>
+                            <td><strong>Geschlossen:</strong></td>
+                            <td><%= new Date(ticket.closed_at).toLocaleString('de-DE') %></td>
+                        </tr>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="fas fa-tools"></i> Aktionen</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <% if (ticket.status === 'open') { %>
+                    <button class="btn btn-outline-danger" onclick="closeTicket()">
+                        <i class="fas fa-lock"></i> Ticket schließen
+                    </button>
+                    <% } %>
+                    
+                    <% if (ticket.transcript) { %>
+                    <button class="btn btn-outline-success" onclick="downloadTranscript()">
+                        <i class="fas fa-download"></i> Transcript herunterladen
+                    </button>
+                    <button class="btn btn-outline-info" onclick="viewTranscriptModal()">
+                        <i class="fas fa-eye"></i> Transcript anzeigen
+                    </button>
+                    <% } %>
+                    
+                    <button class="btn btn-outline-secondary" onclick="exportTicketData()">
+                        <i class="fas fa-file-export"></i> Daten exportieren
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ticket Nachrichten -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="fas fa-comments"></i> Ticket Verlauf
+            <span class="badge bg-secondary ms-2"><%= messages.length %></span>
+        </h5>
+        <small class="text-muted">Sortiert nach Zeit</small>
+    </div>
+    <div class="card-body">
+        <% if (messages.length === 0) { %>
+        <div class="text-center py-4">
+            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+            <p class="text-muted">Keine Nachrichten in diesem Ticket gefunden.</p>
+        </div>
+        <% } else { %>
+        
+        <div class="ticket-messages" style="max-height: 600px; overflow-y: auto;">
+            <% messages.forEach(function(message, index) { %>
+            <div class="discord-message <%= message.user_id === 'SYSTEM' ? 'system-message' : '' %> <%= message.deleted ? 'deleted-message' : '' %>">
+                <div class="message-avatar">
+                    <% if (message.user_id === 'SYSTEM') { %>
+                        <div class="avatar system-avatar">
+                            <i class="fas fa-cog"></i>
+                        </div>
+                    <% } else { %>
+                        <div class="avatar user-avatar">
+                            <%= message.username.charAt(0).toUpperCase() %>
+                        </div>
+                    <% } %>
+                </div>
+                
+                <div class="message-content-wrapper">
+                    <div class="message-header">
+                        <span class="message-author <%= message.user_id === 'SYSTEM' ? 'system-author' : '' %>">
+                            <%= message.username %>
+                        </span>
+                        <span class="message-timestamp">
+                            <%= new Date(message.timestamp).toLocaleString('de-DE') %>
+                        </span>
+                        <% if (message.edited) { %>
+                            <span class="badge bg-warning ms-2">bearbeitet</span>
+                        <% } %>
+                        <% if (message.deleted) { %>
+                            <span class="badge bg-danger ms-2">gelöscht</span>
+                        <% } %>
+                    </div>
+                    
+                    <div class="message-text">
+                        <%= message.content || '[Nachricht ohne Inhalt]' %>
+                    </div>
+                    
+                    <% if (message.attachments) { %>
+                    <div class="message-attachments">
+                        <i class="fas fa-paperclip"></i> 
+                        <small class="text-muted">Anhänge: <%= message.attachments %></small>
+                    </div>
+                    <% } %>
+                </div>
+            </div>
+            <% }); %>
+        </div>
+        
+        <% } %>
+    </div>
+</div>
+
+<!-- Transcript Modal -->
+<div class="modal fade" id="transcriptModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">Ticket Transcript</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="transcriptContent" style="max-height: 400px; overflow-y: auto;">
+                    <!-- Transcript wird hier geladen -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                <button type="button" class="btn btn-success" onclick="downloadTranscript()">
+                    <i class="fas fa-download"></i> Herunterladen
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.discord-message {
+    display: flex;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.discord-message:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.system-message {
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
+.deleted-message {
+    opacity: 0.6;
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.message-avatar {
+    margin-right: 1rem;
+    flex-shrink: 0;
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.user-avatar {
+    background-color: #5865f2;
+    color: white;
+}
+
+.system-avatar {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.message-content-wrapper {
+    flex: 1;
+    min-width: 0;
+}
+
+.message-header {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 0.25rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.message-author {
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.system-author {
+    color: #ffc107;
+}
+
+.message-timestamp {
+    font-size: 0.75rem;
+    color: #72767d;
+}
+
+.message-text {
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    line-height: 1.375;
+}
+
+.message-attachments {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: #b9bbbe;
+}
+
+.ticket-messages {
+    padding: 1rem;
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+</style>
+
+<script>
+function closeTicket() {
+    if (confirm('Bist du sicher, dass du dieses Ticket schließen möchtest?')) {
+        fetch(`/api/tickets/<%= ticket.ticket_id %>/close`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Fehler beim Schließen: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Fehler beim Schließen des Tickets');
+        });
+    }
+}
+
+function viewTranscriptModal() {
+    <% if (ticket.transcript) { %>
+    const transcript = JSON.parse('<%= ticket.transcript.replace(/'/g, "\\'") %>');
+    let content = '<div class="ticket-messages">';
+    
+    transcript.forEach(msg => {
+        content += `
+        <div class="discord-message ${msg.user_id === 'SYSTEM' ? 'system-message' : ''}">
+            <div class="message-avatar">
+                <div class="avatar ${msg.user_id === 'SYSTEM' ? 'system-avatar' : 'user-avatar'}">
+                    ${msg.user_id === 'SYSTEM' ? '<i class="fas fa-cog"></i>' : msg.username.charAt(0).toUpperCase()}
+                </div>
+            </div>
+            <div class="message-content-wrapper">
+                <div class="message-header">
+                    <span class="message-author">${msg.username}</span>
+                    <span class="message-timestamp">${new Date(msg.timestamp).toLocaleString('de-DE')}</span>
+                </div>
+                <div class="message-text">${msg.content || '[Nachricht ohne Inhalt]'}</div>
+            </div>
+        </div>`;
+    });
+    
+    content += '</div>';
+    document.getElementById('transcriptContent').innerHTML = content;
+    <% } %>
+    
+    new bootstrap.Modal(document.getElementById('transcriptModal')).show();
+}
+
+function downloadTranscript() {
+    <% if (ticket.transcript) { %>
+    const transcript = JSON.parse('<%= ticket.transcript.replace(/'/g, "\\'") %>');
+    let content = `Ticket Transcript: <%= ticket.ticket_id %>\n`;
+    content += `Erstellt: <%= new Date(ticket.created_at).toLocaleString('de-DE') %>\n`;
+    content += `Status: <%= ticket.status %>\n`;
+    content += `${'='.repeat(50)}\n\n`;
+    
+    transcript.forEach(msg => {
+        content += `[${new Date(msg.timestamp).toLocaleString('de-DE')}] ${msg.username}: ${msg.content || '[Nachricht ohne Inhalt]'}\n`;
+    });
+    
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `ticket_<%= ticket.ticket_id %>_transcript.txt`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    <% } %>
+}
+
+function exportTicketData() {
+    const ticketData = {
+        ticket_id: '<%= ticket.ticket_id %>',
+        user_id: '<%= ticket.user_id %>',
+        status: '<%= ticket.status %>',
+        created_at: '<%= ticket.created_at %>',
+        closed_at: '<%= ticket.closed_at || "" %>',
+        messages: <%= JSON.stringify(messages) %>
+    };
+    
+    const blob = new Blob([JSON.stringify(ticketData, null, 2)], { type: 'application/json;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `ticket_<%= ticket.ticket_id %>_data.json`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Scroll to bottom of messages
+document.addEventListener('DOMContentLoaded', function() {
+    const messagesContainer = document.querySelector('.ticket-messages');
+    if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+});
+</script>

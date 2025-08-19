@@ -1,0 +1,716 @@
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="fas fa-comments"></i> Nachrichten Log</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportMessages()">
+                <i class="fas fa-download"></i> Exportieren
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="location.reload()">
+                <i class="fas fa-sync-alt"></i> Aktualisieren
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Suchformular -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" action="/messages" class="row g-3">
+            <div class="col-md-6">
+                <label for="search" class="form-label">Nachrichten durchsuchen</label>
+                <input type="text" class="form-control" id="search" name="search" 
+                       value="<%= search %>" placeholder="Nach Nachricht, Benutzer oder Channel suchen...">
+            </div>
+            <div class="col-md-3">
+                <label for="channel" class="form-label">Channel Filter</label>
+                <select class="form-select" name="channel" id="channel">
+                    <option value="">Alle Channels</option>
+                    <% 
+                    const channels = [...new Set(messages.map(m => m.channel_name))];
+                    channels.forEach(channel => { 
+                    %>
+                        <option value="<%= channel %>"><%= channel %></option>
+                    <% }); %>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-squad me-2">
+                    <i class="fas fa-search"></i> Suchen
+                </button>
+                <% if (search) { %>
+                <a href="/messages" class="btn btn-outline-secondary">
+                    <i class="fas fa-times"></i> Reset
+                </a>
+                <% } %>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Suchergebnisse Info -->
+<% if (search) { %>
+<div class="alert alert-info" role="alert">
+    <i class="fas fa-search"></i> 
+    Suchergebnisse für: <strong>"<%= search %>"</strong>
+    <span class="badge bg-info ms-2"><%= messages.length %></span>
+</div>
+<% } %>
+
+<!-- Discord-Style Nachrichten Container -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="fas fa-comments"></i> Nachrichten
+            <span class="badge bg-secondary ms-2"><%= messages.length %></span>
+        </h5>
+        <div class="message-controls">
+            <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="msgView" id="compact" autocomplete="off">
+                <label class="btn btn-outline-secondary" for="compact">
+                    <i class="fas fa-bars"></i> Kompakt
+                </label>
+                
+                <input type="radio" class="btn-check" name="msgView" id="cozy" autocomplete="off" checked>
+                <label class="btn btn-outline-secondary" for="cozy">
+                    <i class="fas fa-align-left"></i> Gemütlich
+                </label>
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <% if (messages.length === 0) { %>
+        <div class="text-center py-4">
+            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+            <p class="text-muted">Keine Nachrichten gefunden.</p>
+        </div>
+        <% } else { %>
+        
+        <div class="discord-chat-container">
+            <% 
+            let lastAuthor = null;
+            let lastDate = null;
+            messages.forEach(function(message, index) { 
+                const messageDate = new Date(message.timestamp).toDateString();
+                const showAvatar = lastAuthor !== message.username || lastDate !== messageDate;
+                lastAuthor = message.username;
+                lastDate = messageDate;
+            %>
+            
+            <!-- Date Divider -->
+            <% if (index === 0 || new Date(messages[index-1].timestamp).toDateString() !== messageDate) { %>
+            <div class="date-divider">
+                <div class="date-divider-line"></div>
+                <div class="date-divider-content">
+                    <span class="date-divider-text">
+                        <%= new Date(message.timestamp).toLocaleDateString('de-DE', { 
+                            weekday: 'long', 
+                            year: 'numeric', 
+                            month: 'long', 
+                            day: 'numeric' 
+                        }) %>
+                    </span>
+                </div>
+                <div class="date-divider-line"></div>
+            </div>
+            <% } %>
+            
+            <div class="discord-message-group <%= showAvatar ? 'show-avatar' : 'no-avatar' %> <%= message.deleted ? 'message-deleted' : '' %> <%= message.edited ? 'message-edited' : '' %>">
+                <% if (showAvatar) { %>
+                <!-- Avatar -->
+                <div class="message-avatar">
+                    <% if (message.user_id === 'SYSTEM') { %>
+                        <div class="avatar system-avatar">
+                            <i class="fas fa-cog"></i>
+                        </div>
+                    <% } else { %>
+                        <img src="https://cdn.discordapp.com/embed/avatars/<%= parseInt(message.user_id || '0') % 5 %>.png" 
+                             alt="<%= message.username %>" class="avatar user-avatar">
+                    <% } %>
+                </div>
+                
+                <!-- Message Header -->
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-author <%= message.user_id === 'SYSTEM' ? 'system-author' : '' %>">
+                            <%= message.username %>
+                        </span>
+                        
+                        <% if (message.user_id === 'SYSTEM') { %>
+                            <span class="bot-badge">BOT</span>
+                        <% } %>
+                        
+                        <span class="message-timestamp">
+                            <%= new Date(message.timestamp).toLocaleString('de-DE', { 
+                                hour: '2-digit', 
+                                minute: '2-digit',
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric'
+                            }) %>
+                        </span>
+                        
+                        <span class="channel-info">
+                            <i class="fas fa-hashtag"></i><%= message.channel_name %>
+                        </span>
+                    </div>
+                    
+                    <div class="message-text">
+                        <% if (message.deleted) { %>
+                            <span class="deleted-message-text">
+                                <i class="fas fa-trash"></i> Diese Nachricht wurde gelöscht
+                            </span>
+                        <% } else { %>
+                            <% if (search && message.content) { %>
+                                <%- message.content.replace(new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<span class="search-highlight">$1</span>') %>
+                            <% } else { %>
+                                <%= message.content || '[Kein Inhalt]' %>
+                            <% } %>
+                        <% } %>
+                        
+                        <% if (message.edited && !message.deleted) { %>
+                            <span class="edited-indicator" title="Bearbeitet">
+                                <i class="fas fa-pencil-alt"></i>
+                            </span>
+                        <% } %>
+                    </div>
+                    
+                    <!-- Attachments -->
+                    <% if (message.attachments && message.attachments.trim() !== '') { %>
+                    <div class="message-attachments">
+                        <% 
+                        const attachments = message.attachments.split(', ').filter(att => att.trim() !== '');
+                        attachments.forEach(function(attachment) { 
+                        %>
+                        <div class="attachment-item">
+                            <i class="fas fa-paperclip"></i>
+                            <a href="<%= attachment %>" target="_blank" class="attachment-link">
+                                <%= attachment.split('/').pop() %>
+                            </a>
+                        </div>
+                        <% }); %>
+                    </div>
+                    <% } %>
+                </div>
+                <% } else { %>
+                <!-- Continuation Message (no avatar) -->
+                <div class="message-content continuation">
+                    <div class="message-text">
+                        <% if (message.deleted) { %>
+                            <span class="deleted-message-text">
+                                <i class="fas fa-trash"></i> Diese Nachricht wurde gelöscht
+                            </span>
+                        <% } else { %>
+                            <% if (search && message.content) { %>
+                                <%- message.content.replace(new RegExp(`(${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<span class="search-highlight">$1</span>') %>
+                            <% } else { %>
+                                <%= message.content || '[Kein Inhalt]' %>
+                            <% } %>
+                        <% } %>
+                        
+                        <% if (message.edited && !message.deleted) { %>
+                            <span class="edited-indicator" title="Bearbeitet">
+                                <i class="fas fa-pencil-alt"></i>
+                            </span>
+                        <% } %>
+                    </div>
+                    
+                    <div class="message-timestamp-hover">
+                        <%= new Date(message.timestamp).toLocaleString('de-DE', { 
+                            hour: '2-digit', 
+                            minute: '2-digit'
+                        }) %>
+                    </div>
+                </div>
+                <% } %>
+                
+                <!-- Message Actions (on hover) -->
+                <div class="message-actions">
+                    <button class="btn btn-sm btn-outline-secondary" title="Details anzeigen" onclick="showMessageDetails('<%= message.id %>')">
+                        <i class="fas fa-info-circle"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" title="In Discord anzeigen" onclick="jumpToMessage('<%= message.message_id %>', '<%= message.channel_id %>')">
+                        <i class="fab fa-discord"></i>
+                    </button>
+                </div>
+            </div>
+            <% }); %>
+        </div>
+        
+        <!-- Pagination -->
+        <% if (totalPages > 1) { %>
+        <div class="pagination-container p-3 border-top">
+            <nav aria-label="Message pagination">
+                <ul class="pagination justify-content-center mb-0">
+                    <% if (hasPrev) { %>
+                    <li class="page-item">
+                        <a class="page-link" href="/messages?page=<%= currentPage - 1 %><%= search ? '&search=' + encodeURIComponent(search) : '' %>">
+                            <i class="fas fa-chevron-left"></i> Zurück
+                        </a>
+                    </li>
+                    <% } %>
+                    
+                    <% for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) { %>
+                    <li class="page-item <%= i === currentPage ? 'active' : '' %>">
+                        <a class="page-link" href="/messages?page=<%= i %><%= search ? '&search=' + encodeURIComponent(search) : '' %>">
+                            <%= i %>
+                        </a>
+                    </li>
+                    <% } %>
+                    
+                    <% if (hasNext) { %>
+                    <li class="page-item">
+                        <a class="page-link" href="/messages?page=<%= currentPage + 1 %><%= search ? '&search=' + encodeURIComponent(search) : '' %>">
+                            Weiter <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    <% } %>
+                </ul>
+            </nav>
+        </div>
+        <% } %>
+        
+        <% } %>
+    </div>
+</div>
+
+<!-- Message Details Modal -->
+<div class="modal fade" id="messageDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">Nachrichten Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="messageDetailsContent">
+                    <!-- Details werden hier geladen -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Discord-Style Chat Container */
+.discord-chat-container {
+    background: var(--primary-bg);
+    min-height: 400px;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 1rem 0;
+}
+
+/* Date Divider */
+.date-divider {
+    display: flex;
+    align-items: center;
+    margin: 1.5rem 1rem;
+}
+
+.date-divider-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border-color);
+}
+
+.date-divider-content {
+    margin: 0 1rem;
+}
+
+.date-divider-text {
+    background: var(--secondary-bg);
+    color: var(--text-muted);
+    padding: 0.25rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Message Groups */
+.discord-message-group {
+    display: flex;
+    padding: 0.125rem 1rem;
+    position: relative;
+    transition: background-color 0.1s ease;
+}
+
+.discord-message-group:hover {
+    background: rgba(255, 0, 102, 0.05);
+}
+
+.discord-message-group.show-avatar {
+    margin-top: 1rem;
+    padding-top: 0.5rem;
+}
+
+.discord-message-group.no-avatar {
+    margin-top: 0.125rem;
+    padding-top: 0.125rem;
+}
+
+/* Message Avatar */
+.message-avatar {
+    width: 40px;
+    height: 40px;
+    margin-right: 1rem;
+    flex-shrink: 0;
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.user-avatar {
+    border: 2px solid var(--primary-pink);
+    box-shadow: 0 0 10px var(--glow-pink);
+}
+
+.system-avatar {
+    background: var(--primary-pink);
+    color: white;
+    font-size: 1.2rem;
+    box-shadow: 0 0 15px var(--glow-pink);
+}
+
+/* Message Content */
+.message-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.message-content.continuation {
+    margin-left: 56px;
+    position: relative;
+}
+
+/* Message Header */
+.message-header {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 0.25rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.message-author {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.message-author:hover {
+    text-decoration: underline;
+}
+
+.system-author {
+    color: var(--primary-pink);
+}
+
+.bot-badge {
+    background: var(--primary-pink);
+    color: white;
+    font-size: 0.625rem;
+    font-weight: 700;
+    padding: 0.125rem 0.25rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.message-timestamp {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: 0.5rem;
+}
+
+.channel-info {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+/* Message Text */
+.message-text {
+    line-height: 1.375;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    color: var(--text-primary);
+    position: relative;
+}
+
+.deleted-message-text {
+    color: var(--text-muted);
+    font-style: italic;
+    opacity: 0.7;
+}
+
+.edited-indicator {
+    color: var(--text-muted);
+    font-size: 0.625rem;
+    margin-left: 0.25rem;
+    opacity: 0.7;
+}
+
+.message-timestamp-hover {
+    position: absolute;
+    left: -56px;
+    top: 0;
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.1s ease;
+    width: 48px;
+    text-align: right;
+}
+
+.message-content.continuation:hover .message-timestamp-hover {
+    opacity: 1;
+}
+
+/* Message States */
+.message-deleted {
+    opacity: 0.6;
+    background: rgba(220, 53, 69, 0.1);
+    border-left: 3px solid #dc3545;
+}
+
+.message-edited {
+    background: rgba(255, 193, 7, 0.05);
+}
+
+/* Message Attachments */
+.message-attachments {
+    margin-top: 0.5rem;
+}
+
+.attachment-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    background: rgba(255, 0, 102, 0.1);
+    border: 1px solid var(--primary-pink);
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    max-width: 400px;
+}
+
+.attachment-item i {
+    color: var(--primary-pink);
+    margin-right: 0.5rem;
+}
+
+.attachment-link {
+    color: var(--primary-pink);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.attachment-link:hover {
+    color: var(--accent-pink);
+    text-decoration: underline;
+}
+
+/* Message Actions */
+.message-actions {
+    position: absolute;
+    top: -10px;
+    right: 1rem;
+    display: flex;
+    gap: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.25rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.discord-message-group:hover .message-actions {
+    opacity: 1;
+}
+
+.message-actions .btn {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Search Highlights */
+.search-highlight {
+    background: linear-gradient(45deg, var(--primary-pink), var(--accent-pink));
+    color: white;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+/* Message Controls */
+.message-controls .btn-check:checked + .btn {
+    background-color: var(--primary-pink);
+    border-color: var(--primary-pink);
+    color: white;
+}
+
+/* Compact View */
+.discord-chat-container.compact .discord-message-group.show-avatar {
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+}
+
+.discord-chat-container.compact .message-avatar {
+    width: 20px;
+    height: 20px;
+    margin-right: 0.5rem;
+}
+
+.discord-chat-container.compact .avatar {
+    width: 20px;
+    height: 20px;
+    font-size: 0.75rem;
+}
+
+.discord-chat-container.compact .message-content.continuation {
+    margin-left: 30px;
+}
+
+/* Pagination */
+.pagination-container {
+    background: rgba(17, 17, 17, 0.5);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .discord-message-group {
+        padding: 0.25rem 0.5rem;
+    }
+    
+    .message-avatar {
+        width: 32px;
+        height: 32px;
+        margin-right: 0.75rem;
+    }
+    
+    .avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 1rem;
+    }
+    
+    .message-content.continuation {
+        margin-left: 40px;
+    }
+    
+    .message-actions {
+        position: relative;
+        top: auto;
+        right: auto;
+        opacity: 1;
+        margin-top: 0.5rem;
+        background: none;
+        border: none;
+        box-shadow: none;
+    }
+}
+</style>
+
+<script>
+function exportMessages() {
+    const messages = document.querySelectorAll('.discord-message-group');
+    let csv = 'Zeitstempel,Benutzer,Channel,Nachricht,Status\n';
+    
+    messages.forEach(msg => {
+        const authorEl = msg.querySelector('.message-author');
+        const timestampEl = msg.querySelector('.message-timestamp');
+        const textEl = msg.querySelector('.message-text');
+        const channelEl = msg.querySelector('.channel-info');
+        
+        if (authorEl && timestampEl && textEl) {
+            const timestamp = timestampEl.textContent.trim();
+            const author = authorEl.textContent.trim();
+            const channel = channelEl ? channelEl.textContent.trim().replace('#', '') : 'Unknown';
+            const content = textEl.textContent.trim().replace(/"/g, '""');
+            const isDeleted = msg.classList.contains('message-deleted') ? 'Gelöscht' : '';
+            const isEdited = msg.classList.contains('message-edited') ? 'Bearbeitet' : '';
+            const status = [isDeleted, isEdited].filter(s => s).join(', ') || 'Normal';
+            
+            csv += `"${timestamp}","${author}","${channel}","${content}","${status}"\n`;
+        }
+    });
+    
+    // Download CSV
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `14th_squad_messages_${new Date().toISOString().slice(0,10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function showMessageDetails(messageId) {
+    // Hier würden die Message-Details geladen werden
+    const content = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Nachrichten-Information</h6>
+                <p><strong>Message ID:</strong> ${messageId}</p>
+                <p><strong>Typ:</strong> Reguläre Nachricht</p>
+            </div>
+            <div class="col-md-6">
+                <h6>Metadaten</h6>
+                <p><strong>Bearbeitet:</strong> Nein</p>
+                <p><strong>Gelöscht:</strong> Nein</p>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('messageDetailsContent').innerHTML = content;
+    new bootstrap.Modal(document.getElementById('messageDetailsModal')).show();
+}
+
+function jumpToMessage(messageId, channelId) {
+    // Discord Deep Link
+    const guildId = '<%= typeof CONFIG !== "undefined" ? CONFIG.GUILD_ID : "1406183789964562432" %>';
+    const discordUrl = `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
+    window.open(discordUrl, '_blank');
+}
+
+// View Toggle
+document.querySelectorAll('input[name="msgView"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const container = document.querySelector('.discord-chat-container');
+        if (this.id === 'compact') {
+            container.classList.add('compact');
+        } else {
+            container.classList.remove('compact');
+        }
+    });
+});
+
+// Real-time search
+let searchTimeout;
+document.getElementById('search').addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const query = this.value;
+    
+    if (query.length >= 2) {
+        searchTimeout = setTimeout(() => {
+            console.log('Live-Suche:', query);
+            // Hier könnte eine AJAX-Suche implementiert werden
+        }, 500);
+    }
+});
+</script>

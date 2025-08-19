@@ -1,0 +1,1369 @@
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="fas fa-users"></i> Benutzerverwaltung</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-squad" onclick="showCreateWebUserModal()">
+                <i class="fas fa-plus"></i> Web-Benutzer erstellen
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshUserData()">
+                <i class="fas fa-sync-alt"></i> Aktualisieren
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportUsers()">
+                <i class="fas fa-download"></i> Exportieren
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Statistiken -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-primary">
+                    <i class="fab fa-discord"></i>
+                    <%= discordUsers.length %>
+                </h5>
+                <p class="card-text">Discord Benutzer</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-success">
+                    <i class="fas fa-check-circle"></i>
+                    <%= discordUsers.filter(u => u.verified).length %>
+                </h5>
+                <p class="card-text">Verifiziert</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-warning">
+                    <i class="fas fa-clock"></i>
+                    <%= discordUsers.filter(u => !u.verified).length %>
+                </h5>
+                <p class="card-text">Ausstehend</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-info">
+                    <i class="fas fa-globe"></i>
+                    <%= webUsers.length %>
+                </h5>
+                <p class="card-text">Web Benutzer</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="userTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="discord-users-tab" data-bs-toggle="tab" data-bs-target="#discord-users" type="button" role="tab">
+            <i class="fab fa-discord"></i> Discord Benutzer (<%= discordUsers.length %>)
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="web-users-tab" data-bs-toggle="tab" data-bs-target="#web-users" type="button" role="tab">
+            <i class="fas fa-globe"></i> Web Benutzer (<%= webUsers.length %>)
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="userTabsContent">
+    <!-- Discord Users Tab -->
+    <div class="tab-pane fade show active" id="discord-users" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Discord Server Mitglieder</h5>
+                <div class="d-flex gap-2">
+                    <div class="input-group" style="width: 250px;">
+                        <input type="text" class="form-control form-control-sm" id="discordSearch" placeholder="Benutzer suchen...">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="filterDiscordUsers()">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    <select class="form-select form-select-sm" id="discordFilter" onchange="filterDiscordUsers()" style="width: 150px;">
+                        <option value="">Alle Status</option>
+                        <option value="verified">Verifiziert</option>
+                        <option value="pending">Ausstehend</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <% if (discordUsers.length === 0) { %>
+                <div class="text-center py-4">
+                    <i class="fab fa-discord fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Keine Discord-Benutzer gefunden.</p>
+                </div>
+                <% } else { %>
+                
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0" id="discordUsersTable">
+                        <thead>
+                            <tr>
+                                <th width="20%">Benutzer</th>
+                                <th width="15%">Status</th>
+                                <th width="15%">Beigetreten</th>
+                                <th width="20%">Aktivität</th>
+                                <th width="30%">Moderation</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% discordUsers.forEach(function(discordUser) { %>
+                            <tr class="discord-user-row" 
+                                data-search="<%= discordUser.username.toLowerCase() %> <%= discordUser.id %>" 
+                                data-status="<%= discordUser.verified ? 'verified' : 'pending' %>">
+                                <td>
+                                    <div class="user-profile">
+                                        <img src="https://cdn.discordapp.com/embed/avatars/<%= parseInt(discordUser.id) % 5 %>.png" 
+                                             alt="<%= discordUser.username %>" class="user-avatar me-2">
+                                        <div class="user-info">
+                                            <div class="username">
+                                                <strong><%= discordUser.username %></strong>
+                                                <% if (discordUser.verified) { %>
+                                                    <i class="fas fa-check-circle text-success ms-1" title="Verifiziert"></i>
+                                                <% } %>
+                                            </div>
+                                            <div class="user-id">
+                                                <code><%= discordUser.id %></code>
+                                                <button class="btn btn-link btn-sm p-0 ms-1" onclick="copyToClipboard('<%= discordUser.id %>')" title="ID kopieren">
+                                                    <i class="fas fa-copy"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <% if (discordUser.verified) { %>
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check-circle"></i> Verifiziert
+                                        </span>
+                                    <% } else { %>
+                                        <span class="badge bg-warning">
+                                            <i class="fas fa-clock"></i> Ausstehend
+                                        </span>
+                                        <% if (discordUser.verification_code) { %>
+                                        <br><small class="text-muted">Code: <code><%= discordUser.verification_code %></code></small>
+                                        <% } %>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <div class="join-date">
+                                        <%= new Date(discordUser.joined_at).toLocaleDateString('de-DE') %>
+                                    </div>
+                                    <small class="text-muted">
+                                        <%= Math.floor((Date.now() - new Date(discordUser.joined_at)) / (1000 * 60 * 60 * 24)) %> Tage
+                                    </small>
+                                </td>
+                                <td>
+                                    <div class="activity-stats" id="activity-<%= discordUser.id %>">
+                                        <div class="loading-placeholder">
+                                            <i class="fas fa-spinner fa-spin"></i> Lädt...
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="moderation-actions">
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <% if (!discordUser.verified) { %>
+                                            <button class="btn btn-outline-success" onclick="verifyUser('<%= discordUser.id %>')" title="Manuell verifizieren">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                            <% } %>
+                                            
+                                            <button class="btn btn-outline-info" onclick="showUserDetails('<%= discordUser.id %>')" title="Details anzeigen">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button class="btn btn-outline-warning dropdown-toggle" data-bs-toggle="dropdown" title="Moderation">
+                                                    <i class="fas fa-gavel"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-dark">
+                                                    <li><a class="dropdown-item" href="#" onclick="moderateUser('<%= discordUser.id %>', 'kick')">
+                                                        <i class="fas fa-door-open"></i> Kicken
+                                                    </a></li>
+                                                    <li><a class="dropdown-item" href="#" onclick="moderateUser('<%= discordUser.id %>', 'ban')">
+                                                        <i class="fas fa-ban"></i> Bannen
+                                                    </a></li>
+                                                    <li><a class="dropdown-item" href="#" onclick="moderateUser('<%= discordUser.id %>', 'timeout')">
+                                                        <i class="fas fa-clock"></i> Timeout
+                                                    </a></li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li><a class="dropdown-item" href="#" onclick="resetVerification('<%= discordUser.id %>')">
+                                                        <i class="fas fa-redo"></i> Verifikation zurücksetzen
+                                                    </a></li>
+                                                    <li><a class="dropdown-item" href="#" onclick="deletePersonalChannel('<%= discordUser.id %>')">
+                                                        <i class="fas fa-trash"></i> Persönlichen Channel löschen
+                                                    </a></li>
+                                                </ul>
+                                            </div>
+                                            
+                                            <button class="btn btn-outline-secondary" onclick="openDiscordProfile('<%= discordUser.id %>')" title="Discord Profil">
+                                                <i class="fab fa-discord"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <!-- Web Users Tab -->
+    <div class="tab-pane fade" id="web-users" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Web Interface Benutzer</h5>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-squad btn-sm" onclick="showCreateWebUserModal()">
+                        <i class="fas fa-plus"></i> Neuen Benutzer erstellen
+                    </button>
+                    <select class="form-select form-select-sm" id="webUserFilter" onchange="filterWebUsers()" style="width: 120px;">
+                        <option value="">Alle Rollen</option>
+                        <option value="admin">Admins</option>
+                        <option value="mod">Moderatoren</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <% if (webUsers.length === 0) { %>
+                <div class="text-center py-4">
+                    <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Keine Web-Benutzer gefunden.</p>
+                    <button class="btn btn-squad" onclick="showCreateWebUserModal()">
+                        <i class="fas fa-plus"></i> Ersten Benutzer erstellen
+                    </button>
+                </div>
+                <% } else { %>
+                
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0" id="webUsersTable">
+                        <thead>
+                            <tr>
+                                <th width="25%">Benutzer</th>
+                                <th width="15%">Rolle</th>
+                                <th width="20%">Unique Password</th>
+                                <th width="20%">Login-Info</th>
+                                <th width="20%">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% webUsers.forEach(function(webUser) { %>
+                            <tr class="web-user-row" data-role="<%= webUser.role %>">
+                                <td>
+                                    <div class="user-profile">
+                                        <div class="user-avatar-web me-2">
+                                            <i class="fas fa-<%= webUser.role === 'admin' ? 'crown' : 'shield-alt' %>"></i>
+                                        </div>
+                                        <div class="user-info">
+                                            <div class="username">
+                                                <strong><%= webUser.username %></strong>
+                                                <% if (webUser.username === user.username) { %>
+                                                    <span class="badge bg-info ms-1">Du</span>
+                                                <% } %>
+                                            </div>
+                                            <div class="user-meta">
+                                                ID: <%= webUser.id %>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-<%= webUser.role === 'admin' ? 'danger' : 'warning' %> role-badge">
+                                        <i class="fas fa-<%= webUser.role === 'admin' ? 'crown' : 'shield-alt' %>"></i>
+                                        <%= webUser.role.toUpperCase() %>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="unique-password-container">
+                                        <code class="unique-password" onclick="copyToClipboard('<%= webUser.unique_password %>')" title="Klicken zum Kopieren">
+                                            <%= webUser.unique_password %>
+                                        </code>
+                                        <button class="btn btn-link btn-sm p-0 ms-1" onclick="regenerateUniquePassword('<%= webUser.id %>')" title="Regenerieren">
+                                            <i class="fas fa-sync-alt"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="login-info">
+                                        <div class="created-date">
+                                            <small class="text-muted">Erstellt:</small><br>
+                                            <%= new Date(webUser.created_at).toLocaleDateString('de-DE') %>
+                                        </div>
+                                        <div class="last-login mt-1">
+                                            <small class="text-muted">Letzter Login:</small><br>
+                                            <% if (webUser.last_login) { %>
+                                                <%= new Date(webUser.last_login).toLocaleDateString('de-DE') %>
+                                                <br><small class="text-info">
+                                                    <%= Math.floor((Date.now() - new Date(webUser.last_login)) / (1000 * 60 * 60 * 24)) %> Tage her
+                                                </small>
+                                            <% } else { %>
+                                                <span class="text-warning">Noch nie</span>
+                                            <% } %>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="web-user-actions">
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button class="btn btn-outline-warning" onclick="resetPassword('<%= webUser.id %>')" title="Passwort zurücksetzen">
+                                                <i class="fas fa-key"></i>
+                                            </button>
+                                            
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button class="btn btn-outline-info dropdown-toggle" data-bs-toggle="dropdown" title="Weitere Aktionen">
+                                                    <i class="fas fa-cog"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-dark">
+                                                    <li><a class="dropdown-item" href="#" onclick="changeRole('<%= webUser.id %>', '<%= webUser.role %>')">
+                                                        <i class="fas fa-user-tag"></i> Rolle ändern
+                                                    </a></li>
+                                                    <li><a class="dropdown-item" href="#" onclick="showWebUserLogs('<%= webUser.id %>')">
+                                                        <i class="fas fa-history"></i> Aktivitäts-Log
+                                                    </a></li>
+                                                    <li><a class="dropdown-item" href="#" onclick="showWebUserSessions('<%= webUser.id %>')">
+                                                        <i class="fas fa-desktop"></i> Aktive Sessions
+                                                    </a></li>
+                                                    <% if (webUser.username !== user.username) { %>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li><a class="dropdown-item text-danger" href="#" onclick="deleteWebUser('<%= webUser.id %>')">
+                                                        <i class="fas fa-trash"></i> Benutzer löschen
+                                                    </a></li>
+                                                    <% } %>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <% } %>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Web User Modal -->
+<div class="modal fade" id="createWebUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus"></i> Neuen Web-Benutzer erstellen
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createWebUserForm">
+                    <div class="mb-3">
+                        <label for="newUsername" class="form-label">Benutzername</label>
+                        <input type="text" class="form-control" id="newUsername" required>
+                        <div class="form-text">Mindestens 3 Zeichen, nur Buchstaben und Zahlen</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newPassword" class="form-label">Passwort</label>
+                        <input type="password" class="form-control" id="newPassword" required>
+                        <div class="form-text">Mindestens 6 Zeichen</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newRole" class="form-label">Rolle</label>
+                        <select class="form-select" id="newRole" required>
+                            <option value="mod">Moderator</option>
+                            <option value="admin">Administrator</option>
+                        </select>
+                        <div class="form-text">
+                            <strong>Moderator:</strong> Kann Nachrichten und Tickets verwalten<br>
+                            <strong>Administrator:</strong> Vollzugriff auf alle Funktionen
+                        </div>
+                    </div>
+                </form>
+                <div id="createUserResult" class="mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-squad" onclick="createWebUser()">
+                    <i class="fas fa-plus"></i> Erstellen
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Details Modal -->
+<div class="modal fade" id="userDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-user"></i> Benutzer Details
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="userDetailsContent">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p>Lade Benutzer-Details...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Password Reset Modal -->
+<div class="modal fade" id="passwordResetModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-key"></i> Passwort zurücksetzen
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="passwordResetForm">
+                    <div class="mb-3">
+                        <label for="resetPassword" class="form-label">Neues Passwort</label>
+                        <input type="password" class="form-control" id="resetPassword" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="confirmPassword" class="form-label">Passwort bestätigen</label>
+                        <input type="password" class="form-control" id="confirmPassword" required>
+                    </div>
+                </form>
+                <div id="passwordResetResult" class="mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-warning" onclick="confirmPasswordReset()">
+                    <i class="fas fa-key"></i> Passwort ändern
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Moderation Modal -->
+<div class="modal fade" id="moderationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-gavel"></i> Moderation
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="moderationContent">
+                    <!-- Content wird hier geladen -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-danger" id="confirmModerationBtn" onclick="confirmModeration()">
+                    Bestätigen
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* User Profile Styling */
+.user-profile {
+    display: flex;
+    align-items: center;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--primary-pink);
+    box-shadow: 0 0 10px var(--glow-pink);
+}
+
+.user-avatar-web {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--primary-pink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.2rem;
+    box-shadow: 0 0 10px var(--glow-pink);
+}
+
+.user-info .username {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.user-info .user-id,
+.user-info .user-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: 'Orbitron', monospace;
+}
+
+/* Activity Stats */
+.activity-stats {
+    font-size: 0.8rem;
+}
+
+.stat-item {
+    display: inline-block;
+    margin-right: 0.5rem;
+    padding: 0.2rem 0.4rem;
+    background: rgba(255, 0, 102, 0.1);
+    border-radius: 4px;
+    margin-bottom: 0.2rem;
+}
+
+.loading-placeholder {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* Moderation Actions */
+.moderation-actions,
+.web-user-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.btn-group-sm > .btn {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Role Badge */
+.role-badge {
+    font-family: 'Orbitron', monospace;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* Unique Password */
+.unique-password-container {
+    display: flex;
+    align-items: center;
+}
+
+.unique-password {
+    background: rgba(255, 0, 102, 0.1);
+    color: var(--primary-pink);
+    border: 1px solid rgba(255, 0, 102, 0.3);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-family: 'Orbitron', monospace;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.unique-password:hover {
+    background: rgba(255, 0, 102, 0.2);
+    box-shadow: 0 0 8px var(--glow-pink);
+}
+
+/* Login Info */
+.login-info {
+    font-size: 0.8rem;
+}
+
+.created-date,
+.last-login {
+    margin-bottom: 0.25rem;
+}
+
+/* Join Date */
+.join-date {
+    font-weight: 500;
+}
+
+/* Navigation Tabs */
+.nav-tabs .nav-link {
+    color: var(--text-secondary);
+    background-color: transparent;
+    border-color: transparent;
+    font-weight: 500;
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--primary-pink);
+    background-color: rgba(255, 0, 102, 0.1);
+    border-color: var(--primary-pink) var(--primary-pink) transparent;
+}
+
+.nav-tabs .nav-link:hover {
+    color: var(--primary-pink);
+    background-color: rgba(255, 0, 102, 0.05);
+}
+
+/* Table Responsive */
+.table-responsive {
+    border-radius: 8px;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(255, 0, 102, 0.075);
+}
+
+/* Filter Animations */
+.discord-user-row,
+.web-user-row {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.discord-user-row[style*="display: none"],
+.web-user-row[style*="display: none"] {
+    opacity: 0;
+    transform: translateX(-10px);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .user-profile {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .moderation-actions,
+    .web-user-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .btn-group-sm {
+        width: 100%;
+    }
+    
+    .btn-group-sm > .btn {
+        flex: 1;
+    }
+}
+
+/* Stats Cards */
+.card .card-title {
+    font-size: 2rem;
+    margin-bottom: 0;
+}
+
+.card .card-text {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* Modal Enhancements */
+.modal-content {
+    border: 1px solid var(--primary-pink);
+    box-shadow: 0 10px 50px var(--glow-pink);
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--primary-pink);
+}
+
+.modal-footer {
+    border-top: 1px solid var(--border-color);
+}
+
+/* Form Enhancements */
+.form-text {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* Dropdown Menus */
+.dropdown-menu-dark {
+    background: rgba(17, 17, 17, 0.95);
+    border: 1px solid var(--primary-pink);
+    backdrop-filter: blur(10px);
+}
+
+.dropdown-item {
+    color: var(--text-secondary);
+    transition: all 0.3s ease;
+}
+
+.dropdown-item:hover {
+    background: rgba(255, 0, 102, 0.1);
+    color: var(--primary-pink);
+}
+
+.dropdown-item.text-danger:hover {
+    background: rgba(220, 53, 69, 0.1);
+    color: #dc3545;
+}
+
+/* Success/Error Messages */
+.alert-success {
+    background: rgba(0, 255, 136, 0.1);
+    border-color: #00ff88;
+    color: var(--text-primary);
+}
+
+.alert-danger {
+    background: rgba(255, 0, 102, 0.1);
+    border-color: var(--primary-pink);
+    color: var(--text-primary);
+}
+
+.alert-warning {
+    background: rgba(255, 170, 0, 0.1);
+    border-color: #ffaa00;
+    color: var(--text-primary);
+}
+</style>
+
+<script>
+let currentUserId = null;
+let currentModerationAction = null;
+
+// Load user activity stats on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadAllUserStats();
+    
+    // Auto-refresh stats every 30 seconds
+    setInterval(loadAllUserStats, 30000);
+});
+
+// Load activity stats for all Discord users
+function loadAllUserStats() {
+    const discordUsers = document.querySelectorAll('.discord-user-row');
+    
+    discordUsers.forEach(row => {
+        const userId = row.querySelector('code').textContent;
+        loadUserStats(userId);
+    });
+}
+
+// Load stats for individual user
+function loadUserStats(userId) {
+    const statsContainer = document.getElementById(`activity-${userId}`);
+    if (!statsContainer) return;
+    
+    fetch(`/api/users/discord/${userId}/details`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                statsContainer.innerHTML = '<span class="text-muted">Fehler beim Laden</span>';
+                return;
+            }
+            
+            const stats = data.stats;
+            statsContainer.innerHTML = `
+                <div class="stat-item" title="Nachrichten">
+                    <i class="fas fa-comment"></i> ${stats.message_count}
+                </div>
+                <div class="stat-item" title="Tickets">
+                    <i class="fas fa-ticket-alt"></i> ${stats.ticket_count}
+                </div>
+                <div class="stat-item" title="Voice Channels">
+                    <i class="fas fa-microphone"></i> ${stats.voice_channel_count}
+                </div>
+            `;
+        })
+        .catch(error => {
+            console.error('Error loading user stats:', error);
+            statsContainer.innerHTML = '<span class="text-muted">Fehler</span>';
+        });
+}
+
+// Discord Users Filter
+function filterDiscordUsers() {
+    const searchTerm = document.getElementById('discordSearch').value.toLowerCase();
+    const statusFilter = document.getElementById('discordFilter').value;
+    const rows = document.querySelectorAll('.discord-user-row');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        const searchData = row.getAttribute('data-search');
+        const status = row.getAttribute('data-status');
+        
+        const searchMatch = !searchTerm || searchData.includes(searchTerm);
+        const statusMatch = !statusFilter || status === statusFilter;
+        
+        if (searchMatch && statusMatch) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Update tab count
+    const tab = document.getElementById('discord-users-tab');
+    tab.innerHTML = `<i class="fab fa-discord"></i> Discord Benutzer (${visibleCount})`;
+}
+
+// Web Users Filter
+function filterWebUsers() {
+    const roleFilter = document.getElementById('webUserFilter').value;
+    const rows = document.querySelectorAll('.web-user-row');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        const role = row.getAttribute('data-role');
+        
+        if (!roleFilter || role === roleFilter) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Update tab count
+    const tab = document.getElementById('web-users-tab');
+    tab.innerHTML = `<i class="fas fa-globe"></i> Web Benutzer (${visibleCount})`;
+}
+
+// Show Create Web User Modal
+function showCreateWebUserModal() {
+    document.getElementById('createWebUserForm').reset();
+    document.getElementById('createUserResult').innerHTML = '';
+    new bootstrap.Modal(document.getElementById('createWebUserModal')).show();
+}
+
+// Create Web User
+function createWebUser() {
+    const username = document.getElementById('newUsername').value;
+    const password = document.getElementById('newPassword').value;
+    const role = document.getElementById('newRole').value;
+    
+    if (!username || !password || !role) {
+        document.getElementById('createUserResult').innerHTML = 
+            '<div class="alert alert-danger">Alle Felder sind erforderlich!</div>';
+        return;
+    }
+    
+    if (username.length < 3) {
+        document.getElementById('createUserResult').innerHTML = 
+            '<div class="alert alert-danger">Benutzername muss mindestens 3 Zeichen lang sein!</div>';
+        return;
+    }
+    
+    if (password.length < 6) {
+        document.getElementById('createUserResult').innerHTML = 
+            '<div class="alert alert-danger">Passwort muss mindestens 6 Zeichen lang sein!</div>';
+        return;
+    }
+    
+    fetch('/users/web/create', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password, role })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('createUserResult').innerHTML = 
+                `<div class="alert alert-success">
+                    <strong><i class="fas fa-check"></i> Benutzer erfolgreich erstellt!</strong><br>
+                    <div class="mt-2 p-2" style="background: rgba(255, 0, 102, 0.1); border-radius: 8px;">
+                        <strong>Login-Daten:</strong><br>
+                        Benutzername: <code>${username}</code><br>
+                        Unique Password: <code>${data.uniquePassword}</code><br>
+                        <small class="text-warning">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            Teile das Unique Password sicher mit dem Benutzer!
+                        </small>
+                    </div>
+                </div>`;
+            
+            // Reload nach 3 Sekunden
+            setTimeout(() => {
+                location.reload();
+            }, 3000);
+        } else {
+            document.getElementById('createUserResult').innerHTML = 
+                `<div class="alert alert-danger">
+                    <i class="fas fa-times"></i> ${data.error}
+                </div>`;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('createUserResult').innerHTML = 
+            '<div class="alert alert-danger">Fehler beim Erstellen des Benutzers</div>';
+    });
+}
+
+// Show User Details
+function showUserDetails(userId) {
+    document.getElementById('userDetailsContent').innerHTML = `
+        <div class="text-center">
+            <i class="fas fa-spinner fa-spin fa-2x"></i>
+            <p>Lade Benutzer-Details...</p>
+        </div>
+    `;
+    
+    new bootstrap.Modal(document.getElementById('userDetailsModal')).show();
+    
+    fetch(`/api/users/discord/${userId}/details`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                document.getElementById('userDetailsContent').innerHTML = 
+                    `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+            
+            const user = data.user;
+            const stats = data.stats;
+            const activities = data.activities;
+            
+            const content = `
+                <div class="row mb-4">
+                    <div class="col-md-4 text-center">
+                        <img src="https://cdn.discordapp.com/embed/avatars/${parseInt(userId) % 5}.png" 
+                             alt="${user.username}" class="user-avatar mb-2" style="width: 80px; height: 80px;">
+                        <h5>${user.username}</h5>
+                        <span class="badge bg-${user.verified ? 'success' : 'warning'}">
+                            ${user.verified ? 'Verifiziert' : 'Ausstehend'}
+                        </span>
+                    </div>
+                    <div class="col-md-8">
+                        <h6><i class="fas fa-info-circle"></i> Grundinformationen</h6>
+                        <table class="table table-sm table-dark">
+                            <tr><td><strong>User ID:</strong></td><td><code>${user.id}</code></td></tr>
+                            <tr><td><strong>Beigetreten:</strong></td><td>${new Date(user.joined_at).toLocaleString('de-DE')}</td></tr>
+                            <tr><td><strong>Verifikationscode:</strong></td><td>${user.verification_code || 'N/A'}</td></tr>
+                            <tr><td><strong>Persönlicher Channel:</strong></td><td>${user.personal_channel_id || 'Keiner'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h6><i class="fas fa-chart-bar"></i> Statistiken</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="stat-card text-center p-3" style="background: rgba(255, 0, 102, 0.1); border-radius: 8px;">
+                                    <h4>${stats.message_count}</h4>
+                                    <small>Nachrichten</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="stat-card text-center p-3" style="background: rgba(255, 170, 0, 0.1); border-radius: 8px;">
+                                    <h4>${stats.ticket_count}</h4>
+                                    <small>Tickets</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="stat-card text-center p-3" style="background: rgba(0, 170, 255, 0.1); border-radius: 8px;">
+                                    <h4>${stats.voice_channel_count}</h4>
+                                    <small>Voice Channels</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-12">
+                        <h6><i class="fas fa-history"></i> Letzte Aktivitäten</h6>
+                        <div class="activity-list" style="max-height: 200px; overflow-y: auto;">
+                            ${activities.length > 0 ? 
+                                activities.map(activity => `
+                                    <div class="activity-item p-2 mb-2" style="background: rgba(255, 255, 255, 0.05); border-radius: 4px;">
+                                        <i class="fas fa-${activity.type === 'message' ? 'comment' : 'ticket-alt'}"></i>
+                                        ${activity.type === 'message' ? 'Nachricht in' : 'Ticket erstellt:'} 
+                                        <strong>${activity.channel_name}</strong>
+                                        <small class="text-muted float-end">
+                                            ${new Date(activity.timestamp).toLocaleString('de-DE')}
+                                        </small>
+                                    </div>
+                                `).join('') : 
+                                '<p class="text-muted">Keine Aktivitäten gefunden.</p>'
+                            }
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('userDetailsContent').innerHTML = content;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('userDetailsContent').innerHTML = 
+                '<div class="alert alert-danger">Fehler beim Laden der Details</div>';
+        });
+}
+
+// Verify User
+function verifyUser(userId) {
+    if (confirm('Möchtest du diesen Benutzer manuell verifizieren?')) {
+        fetch(`/api/users/discord/${userId}/verify`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Benutzer erfolgreich verifiziert!', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast(data.error || 'Fehler bei der Verifikation', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Fehler bei der Verifikation', 'error');
+        });
+    }
+}
+
+// Moderation Functions
+function moderateUser(userId, action) {
+    currentUserId = userId;
+    currentModerationAction = action;
+    
+    const actionNames = {
+        'kick': 'Kicken',
+        'ban': 'Bannen',
+        'timeout': 'Timeout'
+    };
+    
+    const actionDescriptions = {
+        'kick': 'Der Benutzer wird vom Server entfernt, kann aber erneut beitreten.',
+        'ban': 'Der Benutzer wird permanent vom Server ausgeschlossen.',
+        'timeout': 'Der Benutzer wird für eine bestimmte Zeit stumm geschaltet.'
+    };
+    
+    const actionName = actionNames[action] || action;
+    const actionDesc = actionDescriptions[action] || 'Moderation durchführen';
+    
+    document.getElementById('moderationContent').innerHTML = `
+        <div class="alert alert-warning">
+            <h6><i class="fas fa-exclamation-triangle"></i> ${actionName}</h6>
+            <p>${actionDesc}</p>
+            <p><strong>Benutzer:</strong> <code>${userId}</code></p>
+        </div>
+        
+        ${action === 'timeout' ? `
+        <div class="mb-3">
+            <label for="timeoutDuration" class="form-label">Timeout-Dauer</label>
+            <select class="form-select" id="timeoutDuration">
+                <option value="60">1 Minute</option>
+                <option value="300">5 Minuten</option>
+                <option value="600">10 Minuten</option>
+                <option value="3600">1 Stunde</option>
+                <option value="86400">24 Stunden</option>
+            </select>
+        </div>
+        ` : ''}
+        
+        <div class="mb-3">
+            <label for="moderationReason" class="form-label">Grund (optional)</label>
+            <textarea class="form-control" id="moderationReason" rows="3" placeholder="Grund für die Moderation..."></textarea>
+        </div>
+    `;
+    
+    const confirmBtn = document.getElementById('confirmModerationBtn');
+    confirmBtn.textContent = actionName;
+    confirmBtn.className = `btn ${action === 'ban' ? 'btn-danger' : 'btn-warning'}`;
+    
+    new bootstrap.Modal(document.getElementById('moderationModal')).show();
+}
+
+function confirmModeration() {
+    const reason = document.getElementById('moderationReason')?.value || '';
+    const duration = document.getElementById('timeoutDuration')?.value || '';
+    
+    // Hier würde die eigentliche Moderation über Discord API implementiert werden
+    // Da wir keinen direkten Discord API Zugang haben, zeigen wir nur eine Bestätigung
+    
+    showToast(`Moderation "${currentModerationAction}" wurde vermerkt (Discord API Integration erforderlich)`, 'info');
+    bootstrap.Modal.getInstance(document.getElementById('moderationModal')).hide();
+    
+    console.log('Moderation Details:', {
+        userId: currentUserId,
+        action: currentModerationAction,
+        reason: reason,
+        duration: duration
+    });
+}
+
+// Reset Password
+function resetPassword(userId) {
+    currentUserId = userId;
+    document.getElementById('passwordResetForm').reset();
+    document.getElementById('passwordResetResult').innerHTML = '';
+    new bootstrap.Modal(document.getElementById('passwordResetModal')).show();
+}
+
+function confirmPasswordReset() {
+    const password = document.getElementById('resetPassword').value;
+    const confirm = document.getElementById('confirmPassword').value;
+    
+    if (!password || !confirm) {
+        document.getElementById('passwordResetResult').innerHTML = 
+            '<div class="alert alert-danger">Beide Felder sind erforderlich!</div>';
+        return;
+    }
+    
+    if (password !== confirm) {
+        document.getElementById('passwordResetResult').innerHTML = 
+            '<div class="alert alert-danger">Passwörter stimmen nicht überein!</div>';
+        return;
+    }
+    
+    if (password.length < 6) {
+        document.getElementById('passwordResetResult').innerHTML = 
+            '<div class="alert alert-danger">Passwort muss mindestens 6 Zeichen lang sein!</div>';
+        return;
+    }
+    
+    fetch(`/api/users/web/${currentUserId}/reset-password`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ newPassword: password })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('passwordResetResult').innerHTML = 
+                '<div class="alert alert-success">Passwort erfolgreich zurückgesetzt!</div>';
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('passwordResetModal')).hide();
+            }, 2000);
+        } else {
+            document.getElementById('passwordResetResult').innerHTML = 
+                `<div class="alert alert-danger">${data.error}</div>`;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('passwordResetResult').innerHTML = 
+            '<div class="alert alert-danger">Fehler beim Zurücksetzen des Passworts</div>';
+    });
+}
+
+// Regenerate Unique Password
+function regenerateUniquePassword(userId) {
+    if (confirm('Möchtest du das Unique Password neu generieren?')) {
+        fetch(`/api/users/web/${userId}/regenerate-unique`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(`Neues Unique Password: ${data.uniquePassword}`, 'success');
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                showToast(data.error || 'Fehler beim Regenerieren', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Fehler beim Regenerieren', 'error');
+        });
+    }
+}
+
+// Delete Web User
+function deleteWebUser(userId) {
+    if (confirm('Bist du sicher, dass du diesen Benutzer löschen möchtest?')) {
+        fetch(`/api/users/web/${userId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Benutzer erfolgreich gelöscht!', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast(data.error || 'Fehler beim Löschen', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Fehler beim Löschen', 'error');
+        });
+    }
+}
+
+// Additional Functions
+function resetVerification(userId) {
+    if (confirm('Möchtest du die Verifikation dieses Benutzers zurücksetzen?')) {
+        // Implementation needed
+        showToast('Verifikation zurückgesetzt (Implementation erforderlich)', 'info');
+    }
+}
+
+function deletePersonalChannel(userId) {
+    if (confirm('Möchtest du den persönlichen Channel dieses Benutzers löschen?')) {
+        // Implementation needed
+        showToast('Persönlicher Channel gelöscht (Implementation erforderlich)', 'info');
+    }
+}
+
+function changeRole(userId, currentRole) {
+    const newRole = currentRole === 'admin' ? 'mod' : 'admin';
+    if (confirm(`Rolle zu ${newRole.toUpperCase()} ändern?`)) {
+        // Implementation needed
+        showToast(`Rolle zu ${newRole} geändert (Implementation erforderlich)`, 'info');
+    }
+}
+
+function showWebUserLogs(userId) {
+    showToast('Web-User Logs werden geladen (Implementation erforderlich)', 'info');
+}
+
+function showWebUserSessions(userId) {
+    showToast('Aktive Sessions werden angezeigt (Implementation erforderlich)', 'info');
+}
+
+function openDiscordProfile(userId) {
+    const guildId = '<%= typeof CONFIG !== "undefined" ? CONFIG.GUILD_ID : "YOUR_GUILD_ID" %>';
+    const discordUrl = `https://discord.com/users/${userId}`;
+    window.open(discordUrl, '_blank');
+}
+
+// Copy to Clipboard
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('In Zwischenablage kopiert!', 'success');
+    }).catch(() => {
+        showToast('Fehler beim Kopieren', 'error');
+    });
+}
+
+// Utility Functions
+function showToast(message, type = 'info') {
+    const toastContainer = getOrCreateToastContainer();
+    const toastId = 'toast-' + Date.now();
+    
+    const toastHtml = `
+        <div id="${toastId}" class="toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'times' : 'info'}"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+    toast.show();
+    
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
+}
+
+function getOrCreateToastContainer() {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        container.style.zIndex = '9999';
+        document.body.appendChild(container);
+    }
+    return container;
+}
+
+function refreshUserData() {
+    showToast('Daten werden aktualisiert...', 'info');
+    loadAllUserStats();
+    setTimeout(() => {
+        showToast('Daten aktualisiert!', 'success');
+    }, 1000);
+}
+
+function exportUsers() {
+    const discordData = Array.from(document.querySelectorAll('.discord-user-row')).map(row => {
+        const username = row.querySelector('.username strong').textContent;
+        const userId = row.querySelector('code').textContent;
+        const status = row.querySelector('.badge').textContent.trim();
+        const joinDate = row.querySelector('.join-date').textContent;
+        return `"${username}","${userId}","${status}","${joinDate}","Discord"`;
+    });
+    
+    const webData = Array.from(document.querySelectorAll('.web-user-row')).map(row => {
+        const username = row.querySelector('.username strong').textContent;
+        const role = row.querySelector('.role-badge').textContent.trim();
+        const created = row.querySelector('.created-date').textContent.split('\n')[1];
+        const lastLogin = row.querySelector('.last-login').textContent.split('\n')[1];
+        return `"${username}","N/A","${role}","${created}","Web","${lastLogin}"`;
+    });
+    
+    let csv = 'Benutzername,User ID,Status/Rolle,Erstellt/Beigetreten,Typ,Letzter Login\n';
+    csv += discordData.join('\n') + '\n';
+    csv += webData.join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `14th_squad_users_${new Date().toISOString().slice(0,10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Real-time search for Discord users
+document.getElementById('discordSearch').addEventListener('input', filterDiscordUsers);
+
+// Keyboard Shortcuts
+document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        document.getElementById('discordSearch').focus();
+    }
+    
+    if (e.key === 'Escape') {
+        // Close any open modals
+        const modals = document.querySelectorAll('.modal.show');
+        modals.forEach(modal => {
+            bootstrap.Modal.getInstance(modal)?.hide();
+        });
+    }
+});
+</script>
