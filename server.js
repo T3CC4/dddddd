@@ -53,6 +53,80 @@ function logWebAction(userId, action, details) {
     );
 }
 
+// Bot-Server Kommunikationsfunktionen
+function sendCommandToBot(commandType, targetId, parameters = null) {
+    return new Promise((resolve, reject) => {
+        const parametersJson = parameters ? JSON.stringify(parameters) : null;
+        
+        db.run(`INSERT INTO bot_commands (command_type, target_id, parameters, status, created_at) 
+                VALUES (?, ?, ?, 'pending', ?)`,
+            [commandType, targetId, parametersJson, new Date().toISOString()],
+            function(err) {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(this.lastID);
+                }
+            }
+        );
+    });
+}
+
+function waitForCommandResult(commandId, timeout = 30000) {
+    return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+        
+        const checkStatus = () => {
+            db.get(`SELECT * FROM bot_commands WHERE id = ?`, [commandId], (err, command) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                
+                if (command.status === 'completed') {
+                    resolve({ success: true, result: command.result });
+                } else if (command.status === 'failed') {
+                    resolve({ success: false, error: command.result });
+                } else if (Date.now() - startTime > timeout) {
+                    resolve({ success: false, error: 'Timeout - Bot hat nicht geantwortet' });
+                } else {
+                    setTimeout(checkStatus, 1000);
+                }
+            });
+        };
+        
+        checkStatus();
+    });
+}
+
+function getTimeAgo(timestamp) {
+    if (!timestamp) return 'Unbekannt';
+    
+    const now = new Date();
+    const time = new Date(timestamp);
+    
+    if (isNaN(time.getTime())) {
+        return 'Unbekannt';
+    }
+    
+    const diffInSeconds = Math.floor((now - time) / 1000);
+    
+    if (diffInSeconds < 60) {
+        return 'vor wenigen Sekunden';
+    } else if (diffInSeconds < 3600) {
+        const minutes = Math.floor(diffInSeconds / 60);
+        return `vor ${minutes} Minute${minutes !== 1 ? 'n' : ''}`;
+    } else if (diffInSeconds < 86400) {
+        const hours = Math.floor(diffInSeconds / 3600);
+        return `vor ${hours} Stunde${hours !== 1 ? 'n' : ''}`;
+    } else if (diffInSeconds < 604800) {
+        const days = Math.floor(diffInSeconds / 86400);
+        return `vor ${days} Tag${days !== 1 ? 'en' : ''}`;
+    } else {
+        return time.toLocaleDateString('de-DE');
+    }
+}
+
 // ===================
 // HAUPTROUTEN
 // ===================
@@ -73,7 +147,7 @@ app.get('/login', (req, res) => {
     }
     res.render('login', { 
         error: null,
-        layout: false // Login verwendet kein Layout
+        layout: false
     });
 });
 
@@ -168,7 +242,7 @@ app.get('/dashboard', requireAuth(), (req, res) => {
             total_web_users: 0
         };
         
-        // Korrigierte Aktivitäten Query - ohne ORDER BY in UNION Subqueries
+        // Aktivitäten Query
         const activitiesQuery = `
             SELECT 
                 'message' as type,
@@ -275,7 +349,6 @@ app.get('/dashboard', requireAuth(), (req, res) => {
             const formattedActivities = (activities || []).map(activity => {
                 const timeAgo = getTimeAgo(activity.timestamp);
                 
-                // Aktivitätstext basierend auf Typ formatieren
                 let activityText = '';
                 switch(activity.type) {
                     case 'message':
@@ -325,126 +398,6 @@ app.get('/dashboard', requireAuth(), (req, res) => {
                 title: 'Dashboard - 14th Squad Management'
             });
         });
-    });
-});
-
-function getTimeAgo(timestamp) {
-    if (!timestamp) return 'Unbekannt';
-    
-    const now = new Date();
-    const time = new Date(timestamp);
-    
-    // Überprüfe ob timestamp gültig ist
-    if (isNaN(time.getTime())) {
-        return 'Unbekannt';
-    }
-    
-    const diffInSeconds = Math.floor((now - time) / 1000);
-    
-    if (diffInSeconds < 60) {
-        return 'vor wenigen Sekunden';
-    } else if (diffInSeconds < 3600) {
-        const minutes = Math.floor(diffInSeconds / 60);
-        return `vor ${minutes} Minute${minutes !== 1 ? 'n' : ''}`;
-    } else if (diffInSeconds < 86400) {
-        const hours = Math.floor(diffInSeconds / 3600);
-        return `vor ${hours} Stunde${hours !== 1 ? 'n' : ''}`;
-    } else if (diffInSeconds < 604800) {
-        const days = Math.floor(diffInSeconds / 86400);
-        return `vor ${days} Tag${days !== 1 ? 'en' : ''}`;
-    } else {
-        return time.toLocaleDateString('de-DE');
-    }
-}
-
-app.get('/api/dashboard/activities', requireAuth(), (req, res) => {
-    const limit = parseInt(req.query.limit) || 10;
-    
-    // Einfachere Query für die API
-    const activitiesQuery = `
-        SELECT 
-            'message' as type,
-            username as actor,
-            channel_name as target,
-            content as details,
-            timestamp,
-            'fas fa-comment' as icon,
-            'info' as color
-        FROM message_logs 
-        WHERE user_id != 'SYSTEM' 
-            AND content IS NOT NULL 
-            AND content != ''
-            AND timestamp IS NOT NULL
-        
-        UNION ALL
-        
-        SELECT 
-            'ticket_created' as type,
-            (SELECT username FROM users WHERE id = tickets.user_id) as actor,
-            ticket_id as target,
-            'Ticket erstellt' as details,
-            created_at as timestamp,
-            'fas fa-ticket-alt' as icon,
-            'success' as color
-        FROM tickets
-        WHERE created_at IS NOT NULL
-        
-        UNION ALL
-        
-        SELECT 
-            'user_verified' as type,
-            username as actor,
-            'Server' as target,
-            'Erfolgreich verifiziert' as details,
-            joined_at as timestamp,
-            'fas fa-user-check' as icon,
-            'success' as color
-        FROM users 
-        WHERE verified = 1 
-            AND joined_at IS NOT NULL
-        
-        ORDER BY timestamp DESC
-        LIMIT ?
-    `;
-    
-    db.all(activitiesQuery, [limit], (err, activities) => {
-        if (err) {
-            console.error('Activities API error:', err);
-            return res.status(500).json({ error: 'Fehler beim Laden der Aktivitäten' });
-        }
-        
-        const formattedActivities = (activities || []).map(activity => {
-            const timeAgo = getTimeAgo(activity.timestamp);
-            
-            let activityText = '';
-            switch(activity.type) {
-                case 'message':
-                    const shortContent = activity.details && activity.details.length > 50 
-                        ? activity.details.substring(0, 50) + '...' 
-                        : activity.details || '[Keine Nachricht]';
-                    activityText = `${activity.actor} schrieb in #${activity.target}: "${shortContent}"`;
-                    break;
-                case 'ticket_created':
-                    activityText = `${activity.actor || 'Unbekannter Benutzer'} erstellte Ticket ${activity.target}`;
-                    break;
-                case 'user_verified':
-                    activityText = `${activity.actor} wurde verifiziert`;
-                    break;
-                default:
-                    activityText = `${activity.actor || 'Unbekannt'}: ${activity.details || 'Aktivität'}`;
-            }
-            
-            return {
-                type: activity.type,
-                icon: activity.icon,
-                color: activity.color,
-                text: activityText,
-                time: timeAgo,
-                timestamp: activity.timestamp
-            };
-        });
-        
-        res.json({ activities: formattedActivities });
     });
 });
 
@@ -503,12 +456,11 @@ app.get('/messages', requireAuth(), (req, res) => {
             logWebAction(req.session.user.id, 'VIEW_MESSAGES', 
                 `Seite ${page}, Suche: ${search}, Channel: ${channel}`);
             
-            // WICHTIG: Übergebe alle benötigten Variablen an das Template
             res.render('messages', { 
                 user: req.session.user,
                 messages: messages || [],
                 search,
-                channel, // Diese Variable wird im Template verwendet
+                channel,
                 currentPage: page,
                 totalPages,
                 hasNext: page < totalPages,
@@ -579,7 +531,7 @@ app.get('/tickets/:ticketId', requireAuth(), (req, res) => {
 
 // User Management (nur Admin)
 app.get('/users', requireAuth('admin'), (req, res) => {
-    // Lade Discord-Benutzer aus der users-Tabelle mit erweiterten Informationen
+    // Lade Discord-Benutzer
     db.all(`
         SELECT 
             u.*,
@@ -652,169 +604,6 @@ app.get('/logs', requireAuth('admin'), (req, res) => {
     });
 });
 
-// ===================
-// API ENDPUNKTE
-// ===================
-
-// Alle Discord-Benutzer laden (für Live-Updates)
-app.get('/api/users/discord', requireAuth(), (req, res) => {
-    db.all(`
-        SELECT 
-            u.*,
-            (SELECT COUNT(*) FROM message_logs WHERE user_id = u.id AND user_id != 'SYSTEM') as message_count,
-            (SELECT COUNT(*) FROM tickets WHERE user_id = u.id) as ticket_count,
-            (SELECT COUNT(*) FROM temp_channels WHERE owner_id = u.id) as voice_channel_count
-        FROM users u 
-        ORDER BY u.joined_at DESC
-    `, (err, users) => {
-        if (err) {
-            return res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
-        }
-        
-        res.json({ users: users || [] });
-    });
-});
-
-// Discord Benutzer Statistiken
-app.get('/api/users/discord/stats', requireAuth(), (req, res) => {
-    db.all(`
-        SELECT 
-            COUNT(*) as total_users,
-            SUM(CASE WHEN verified = 1 THEN 1 ELSE 0 END) as verified_users,
-            SUM(CASE WHEN verified = 0 THEN 1 ELSE 0 END) as pending_users,
-            COUNT(DISTINCT personal_channel_id) as active_channels
-        FROM users
-    `, (err, stats) => {
-        if (err) {
-            return res.status(500).json({ error: 'Fehler beim Laden der Statistiken' });
-        }
-        
-        res.json(stats[0] || { total_users: 0, verified_users: 0, pending_users: 0, active_channels: 0 });
-    });
-});
-
-// Discord Benutzer manuell verifizieren
-app.post('/api/users/discord/:userId/verify', requireAuth('admin'), (req, res) => {
-    const userId = req.params.userId;
-    
-    db.run(`UPDATE users SET verified = 1 WHERE id = ?`, [userId], function(err) {
-        if (err) {
-            return res.status(500).json({ error: 'Fehler bei der Verifikation' });
-        }
-        
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-        }
-        
-        logWebAction(req.session.user.id, 'VERIFY_USER', `Discord-Benutzer ${userId} manuell verifiziert`);
-        
-        res.json({ success: true, message: 'Benutzer erfolgreich verifiziert' });
-    });
-});
-
-// Discord Benutzer Details
-app.get('/api/users/discord/:userId/details', requireAuth(), (req, res) => {
-    const userId = req.params.userId;
-    
-    // Benutzer-Grunddaten
-    db.get(`SELECT * FROM users WHERE id = ?`, [userId], (err, user) => {
-        if (err || !user) {
-            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-        }
-        
-        // Statistiken sammeln
-        db.all(`
-            SELECT 
-                (SELECT COUNT(*) FROM message_logs WHERE user_id = ? AND user_id != 'SYSTEM') as message_count,
-                (SELECT COUNT(*) FROM tickets WHERE user_id = ?) as ticket_count,
-                (SELECT COUNT(*) FROM temp_channels WHERE owner_id = ?) as voice_channel_count
-        `, [userId, userId, userId], (err, stats) => {
-            if (err) {
-                console.error('User stats error:', err);
-            }
-            
-            const userStats = stats[0] || { message_count: 0, ticket_count: 0, voice_channel_count: 0 };
-            
-            // Letzte Aktivitäten
-            db.all(`
-                SELECT 'message' as type, channel_name, timestamp FROM message_logs 
-                WHERE user_id = ? AND user_id != 'SYSTEM'
-                UNION ALL
-                SELECT 'ticket' as type, ticket_id as channel_name, created_at as timestamp FROM tickets 
-                WHERE user_id = ?
-                ORDER BY timestamp DESC LIMIT 10
-            `, [userId, userId], (err, activities) => {
-                if (err) {
-                    console.error('User activities error:', err);
-                }
-                
-                res.json({
-                    user,
-                    stats: userStats,
-                    activities: activities || []
-                });
-            });
-        });
-    });
-});
-
-// Discord Benutzer Verifikation zurücksetzen
-app.post('/api/users/discord/:userId/reset-verification', requireAuth('admin'), (req, res) => {
-    const userId = req.params.userId;
-    const newVerificationCode = crypto.randomBytes(4).toString('hex').toUpperCase();
-    
-    db.run(`UPDATE users SET verified = 0, verification_code = ? WHERE id = ?`, 
-        [newVerificationCode, userId], function(err) {
-        if (err) {
-            return res.status(500).json({ error: 'Fehler beim Zurücksetzen der Verifikation' });
-        }
-        
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-        }
-        
-        logWebAction(req.session.user.id, 'RESET_VERIFICATION', 
-            `Verifikation für Discord-Benutzer ${userId} zurückgesetzt`);
-        
-        res.json({ 
-            success: true, 
-            message: 'Verifikation zurückgesetzt',
-            newVerificationCode: newVerificationCode
-        });
-    });
-});
-
-// Persönlichen Channel löschen
-app.post('/api/users/discord/:userId/delete-channel', requireAuth('admin'), (req, res) => {
-    const userId = req.params.userId;
-    
-    // Hole Channel-ID aus der Datenbank
-    db.get(`SELECT personal_channel_id FROM users WHERE id = ?`, [userId], (err, user) => {
-        if (err) {
-            return res.status(500).json({ error: 'Datenbankfehler' });
-        }
-        
-        if (!user || !user.personal_channel_id) {
-            return res.json({ success: true, message: 'Kein persönlicher Channel vorhanden' });
-        }
-        
-        // Entferne Channel-Referenz aus Datenbank
-        db.run(`UPDATE users SET personal_channel_id = NULL WHERE id = ?`, [userId], function(err) {
-            if (err) {
-                return res.status(500).json({ error: 'Fehler beim Löschen der Channel-Referenz' });
-            }
-            
-            logWebAction(req.session.user.id, 'DELETE_PERSONAL_CHANNEL', 
-                `Persönlicher Channel für Discord-Benutzer ${userId} entfernt`);
-            
-            res.json({ 
-                success: true, 
-                message: 'Channel-Referenz entfernt (Discord-Channel muss manuell gelöscht werden)'
-            });
-        });
-    });
-});
-
 // Neuen Web-Benutzer erstellen (nur Admin)
 app.post('/users/web/create', requireAuth('admin'), async (req, res) => {
     const { username, password, role } = req.body;
@@ -866,437 +655,11 @@ app.post('/users/web/create', requireAuth('admin'), async (req, res) => {
     }
 });
 
-// Web-Benutzer Passwort zurücksetzen
-app.post('/api/users/web/:userId/reset-password', requireAuth('admin'), async (req, res) => {
-    const userId = req.params.userId;
-    const { newPassword } = req.body;
-    
-    if (!newPassword || newPassword.length < 6) {
-        return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
-    }
-    
-    try {
-        const passwordHash = await bcrypt.hash(newPassword, 12);
-        
-        db.run(`UPDATE web_users SET password_hash = ? WHERE id = ?`, [passwordHash, userId], function(err) {
-            if (err) {
-                return res.status(500).json({ error: 'Fehler beim Passwort-Update' });
-            }
-            
-            if (this.changes === 0) {
-                return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-            }
-            
-            logWebAction(req.session.user.id, 'RESET_PASSWORD', `Passwort für Web-Benutzer ${userId} zurückgesetzt`);
-            
-            res.json({ success: true, message: 'Passwort erfolgreich zurückgesetzt' });
-        });
-    } catch (error) {
-        console.error('Password reset error:', error);
-        res.status(500).json({ error: 'Fehler beim Zurücksetzen des Passworts' });
-    }
-});
+// Importiere API-Routen
+const apiRoutes = require('./api');
+app.use('/api', apiRoutes);
 
-// Unique Password regenerieren
-app.post('/api/users/web/:userId/regenerate-unique', requireAuth('admin'), (req, res) => {
-    const userId = req.params.userId;
-    const newUniquePassword = crypto.randomBytes(6).toString('hex').toUpperCase();
-    
-    db.run(`UPDATE web_users SET unique_password = ? WHERE id = ?`, [newUniquePassword, userId], function(err) {
-        if (err) {
-            return res.status(500).json({ error: 'Fehler beim Update' });
-        }
-        
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-        }
-        
-        logWebAction(req.session.user.id, 'REGENERATE_UNIQUE_PASSWORD', `Unique Password für Web-Benutzer ${userId} regeneriert`);
-        
-        res.json({ 
-            success: true, 
-            message: 'Unique Password regeneriert',
-            uniquePassword: newUniquePassword
-        });
-    });
-});
-
-// Web-Benutzer Rolle ändern
-app.post('/api/users/web/:userId/change-role', requireAuth('admin'), (req, res) => {
-    const userId = req.params.userId;
-    const { newRole } = req.body;
-    
-    if (!['admin', 'mod'].includes(newRole)) {
-        return res.status(400).json({ error: 'Ungültige Rolle' });
-    }
-    
-    // Verhindere dass der letzte Admin seine Rolle ändert
-    if (newRole === 'mod') {
-        db.get(`SELECT COUNT(*) as admin_count FROM web_users WHERE role = 'admin'`, (err, result) => {
-            if (err) {
-                return res.status(500).json({ error: 'Datenbankfehler' });
-            }
-            
-            if (result.admin_count <= 1) {
-                return res.status(400).json({ error: 'Mindestens ein Administrator muss vorhanden bleiben' });
-            }
-            
-            updateUserRole();
-        });
-    } else {
-        updateUserRole();
-    }
-    
-    function updateUserRole() {
-        db.run(`UPDATE web_users SET role = ? WHERE id = ?`, [newRole, userId], function(err) {
-            if (err) {
-                return res.status(500).json({ error: 'Fehler beim Ändern der Rolle' });
-            }
-            
-            if (this.changes === 0) {
-                return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-            }
-            
-            logWebAction(req.session.user.id, 'CHANGE_ROLE', 
-                `Rolle für Web-Benutzer ${userId} zu ${newRole} geändert`);
-            
-            res.json({ 
-                success: true, 
-                message: `Rolle erfolgreich zu ${newRole} geändert`
-            });
-        });
-    }
-});
-
-// Web-Benutzer löschen
-app.delete('/api/users/web/:userId', requireAuth('admin'), (req, res) => {
-    const userId = req.params.userId;
-    
-    // Verhindere Selbstlöschung
-    if (parseInt(userId) === req.session.user.id) {
-        return res.status(400).json({ error: 'Du kannst dich nicht selbst löschen' });
-    }
-    
-    db.run(`DELETE FROM web_users WHERE id = ?`, [userId], function(err) {
-        if (err) {
-            return res.status(500).json({ error: 'Fehler beim Löschen' });
-        }
-        
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-        }
-        
-        logWebAction(req.session.user.id, 'DELETE_WEB_USER', `Web-Benutzer ${userId} gelöscht`);
-        
-        res.json({ success: true, message: 'Benutzer erfolgreich gelöscht' });
-    });
-});
-
-// Web-Benutzer Aktivitäts-Logs
-app.get('/api/users/web/:userId/logs', requireAuth('admin'), (req, res) => {
-    const userId = req.params.userId;
-    
-    db.all(`
-        SELECT * FROM web_logs 
-        WHERE user_id = ? 
-        ORDER BY timestamp DESC 
-        LIMIT 50
-    `, [userId], (err, logs) => {
-        if (err) {
-            return res.status(500).json({ error: 'Fehler beim Laden der Logs' });
-        }
-        
-        res.json({ logs: logs || [] });
-    });
-});
-
-// Benutzer suchen (für Live-Search)
-app.get('/api/users/search', requireAuth(), (req, res) => {
-    const query = req.query.q;
-    
-    if (!query || query.length < 2) {
-        return res.json({ discord: [], web: [] });
-    }
-    
-    // Suche Discord-Benutzer
-    db.all(`
-        SELECT * FROM users 
-        WHERE username LIKE ? OR id LIKE ? 
-        LIMIT 10
-    `, [`%${query}%`, `%${query}%`], (err, discordUsers) => {
-        if (err) {
-            console.error('Discord user search error:', err);
-            discordUsers = [];
-        }
-        
-        // Suche Web-Benutzer
-        db.all(`
-            SELECT id, username, role, created_at FROM web_users 
-            WHERE username LIKE ? 
-            LIMIT 10
-        `, [`%${query}%`], (err, webUsers) => {
-            if (err) {
-                console.error('Web user search error:', err);
-                webUsers = [];
-            }
-            
-            res.json({
-                discord: discordUsers || [],
-                web: webUsers || []
-            });
-        });
-    });
-});
-
-// Suche in Nachrichten (AJAX)
-app.get('/api/messages/search', requireAuth(), (req, res) => {
-    const query = req.query.q;
-    
-    if (!query || query.length < 2) {
-        return res.json([]);
-    }
-    
-    db.all(`
-        SELECT * FROM message_logs 
-        WHERE content LIKE ? OR username LIKE ? 
-        ORDER BY timestamp DESC 
-        LIMIT 20
-    `, [`%${query}%`, `%${query}%`], (err, messages) => {
-        if (err) {
-            console.error('Message search error:', err);
-            return res.json([]);
-        }
-        
-        res.json(messages || []);
-    });
-});
-
-// Ticket schließen
-app.post('/api/tickets/:ticketId/close', requireAuth(), (req, res) => {
-    const ticketId = req.params.ticketId;
-    
-    // Erstelle Transcript
-    db.get(`SELECT channel_id FROM tickets WHERE ticket_id = ?`, [ticketId], (err, ticket) => {
-        if (err) {
-            return res.status(500).json({ error: 'Datenbankfehler' });
-        }
-        
-        if (!ticket) {
-            return res.status(404).json({ error: 'Ticket nicht gefunden' });
-        }
-        
-        db.all(`
-            SELECT * FROM message_logs 
-            WHERE channel_id = ? 
-            ORDER BY timestamp ASC
-        `, [ticket.channel_id], (err, messages) => {
-            if (err) {
-                console.error('Ticket messages error:', err);
-                messages = [];
-            }
-            
-            const transcript = JSON.stringify(messages || []);
-            
-            db.run(`UPDATE tickets SET status = 'closed', closed_at = ?, transcript = ? WHERE ticket_id = ?`,
-                [new Date().toISOString(), transcript, ticketId], (err) => {
-                    if (err) {
-                        return res.status(500).json({ error: 'Fehler beim Schließen' });
-                    }
-                    
-                    logWebAction(req.session.user.id, 'CLOSE_TICKET', `Ticket ${ticketId} geschlossen`);
-                    
-                    res.json({ success: true, message: 'Ticket erfolgreich geschlossen' });
-                });
-        });
-    });
-});
-
-// Ticket Transcript herunterladen
-app.get('/api/tickets/:ticketId/transcript', requireAuth(), (req, res) => {
-    const ticketId = req.params.ticketId;
-    
-    db.get(`SELECT * FROM tickets WHERE ticket_id = ?`, [ticketId], (err, ticket) => {
-        if (err) {
-            return res.status(500).json({ error: 'Datenbankfehler' });
-        }
-        
-        if (!ticket) {
-            return res.status(404).json({ error: 'Ticket nicht gefunden' });
-        }
-        
-        if (!ticket.transcript) {
-            return res.status(404).json({ error: 'Kein Transcript verfügbar' });
-        }
-        
-        try {
-            const messages = JSON.parse(ticket.transcript);
-            let transcriptText = `14th Squad - Ticket Transcript\n`;
-            transcriptText += `Ticket ID: ${ticket.ticket_id}\n`;
-            transcriptText += `Erstellt: ${new Date(ticket.created_at).toLocaleString('de-DE')}\n`;
-            transcriptText += `Status: ${ticket.status}\n`;
-            transcriptText += `${'='.repeat(60)}\n\n`;
-            
-            messages.forEach(msg => {
-                const timestamp = new Date(msg.timestamp).toLocaleString('de-DE');
-                transcriptText += `[${timestamp}] ${msg.username}: ${msg.content || '[Kein Inhalt]'}\n`;
-                
-                if (msg.attachments) {
-                    transcriptText += `    📎 Anhänge: ${msg.attachments}\n`;
-                }
-            });
-            
-            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-            res.setHeader('Content-Disposition', `attachment; filename="ticket_${ticketId}_transcript.txt"`);
-            res.send(transcriptText);
-            
-            logWebAction(req.session.user.id, 'DOWNLOAD_TRANSCRIPT', `Transcript für Ticket ${ticketId} heruntergeladen`);
-            
-        } catch (error) {
-            console.error('Transcript parse error:', error);
-            res.status(500).json({ error: 'Fehler beim Verarbeiten des Transcripts' });
-        }
-    });
-});
-
-// ===================
-// SYSTEM API ENDPUNKTE
-// ===================
-
-// System Status
-app.get('/api/system/status', requireAuth(), (req, res) => {
-    db.all(`
-        SELECT 
-            (SELECT COUNT(*) FROM message_logs) as total_messages,
-            (SELECT COUNT(*) FROM tickets) as total_tickets,
-            (SELECT COUNT(*) FROM users) as total_discord_users,
-            (SELECT COUNT(*) FROM web_users) as total_web_users,
-            (SELECT COUNT(*) FROM temp_channels) as active_temp_channels,
-            (SELECT COUNT(*) FROM web_logs) as total_web_logs
-    `, (err, stats) => {
-        if (err) {
-            return res.status(500).json({ error: 'Fehler beim Laden der System-Statistiken' });
-        }
-        
-        const systemInfo = {
-            stats: stats[0] || {},
-            uptime: process.uptime(),
-            timestamp: new Date().toISOString(),
-            version: '1.0.0',
-            environment: process.env.NODE_ENV || 'development'
-        };
-        
-        res.json(systemInfo);
-    });
-});
-
-// Database Health Check
-app.get('/api/system/health', requireAuth('admin'), (req, res) => {
-    const healthChecks = [];
-    
-    // Teste Datenbank-Verbindung
-    db.get(`SELECT COUNT(*) as count FROM sqlite_master WHERE type='table'`, (err, result) => {
-        if (err) {
-            healthChecks.push({ name: 'database', status: 'error', message: err.message });
-        } else {
-            healthChecks.push({ name: 'database', status: 'ok', tables: result.count });
-        }
-        
-        // Teste wichtige Tabellen
-        const requiredTables = ['users', 'message_logs', 'tickets', 'web_users', 'web_logs', 'temp_channels'];
-        let tablesChecked = 0;
-        
-        requiredTables.forEach(tableName => {
-            db.get(`SELECT COUNT(*) as count FROM ${tableName}`, (err, result) => {
-                tablesChecked++;
-                
-                if (err) {
-                    healthChecks.push({ name: tableName, status: 'error', message: err.message });
-                } else {
-                    healthChecks.push({ name: tableName, status: 'ok', rows: result.count });
-                }
-                
-                if (tablesChecked === requiredTables.length) {
-                    res.json({
-                        status: healthChecks.every(check => check.status === 'ok') ? 'healthy' : 'unhealthy',
-                        checks: healthChecks,
-                        timestamp: new Date().toISOString()
-                    });
-                }
-            });
-        });
-    });
-});
-
-// Export Data (nur Admin)
-app.get('/api/system/export/:type', requireAuth('admin'), (req, res) => {
-    const exportType = req.params.type;
-    
-    logWebAction(req.session.user.id, 'EXPORT_DATA', `Daten-Export: ${exportType}`);
-    
-    switch (exportType) {
-        case 'messages':
-            db.all(`SELECT * FROM message_logs ORDER BY timestamp DESC`, (err, data) => {
-                if (err) {
-                    return res.status(500).json({ error: 'Fehler beim Export' });
-                }
-                
-                res.setHeader('Content-Type', 'application/json');
-                res.setHeader('Content-Disposition', `attachment; filename="messages_export_${Date.now()}.json"`);
-                res.json(data);
-            });
-            break;
-            
-        case 'users':
-            db.all(`SELECT * FROM users ORDER BY joined_at DESC`, (err, data) => {
-                if (err) {
-                    return res.status(500).json({ error: 'Fehler beim Export' });
-                }
-                
-                res.setHeader('Content-Type', 'application/json');
-                res.setHeader('Content-Disposition', `attachment; filename="users_export_${Date.now()}.json"`);
-                res.json(data);
-            });
-            break;
-            
-        case 'tickets':
-            db.all(`SELECT * FROM tickets ORDER BY created_at DESC`, (err, data) => {
-                if (err) {
-                    return res.status(500).json({ error: 'Fehler beim Export' });
-                }
-                
-                res.setHeader('Content-Type', 'application/json');
-                res.setHeader('Content-Disposition', `attachment; filename="tickets_export_${Date.now()}.json"`);
-                res.json(data);
-            });
-            break;
-            
-        case 'logs':
-            db.all(`
-                SELECT wl.*, wu.username 
-                FROM web_logs wl 
-                LEFT JOIN web_users wu ON wl.user_id = wu.id 
-                ORDER BY wl.timestamp DESC
-            `, (err, data) => {
-                if (err) {
-                    return res.status(500).json({ error: 'Fehler beim Export' });
-                }
-                
-                res.setHeader('Content-Type', 'application/json');
-                res.setHeader('Content-Disposition', `attachment; filename="web_logs_export_${Date.now()}.json"`);
-                res.json(data);
-            });
-            break;
-            
-        default:
-            res.status(400).json({ error: 'Unbekannter Export-Typ' });
-    }
-});
-
-// ===================
-// ERROR HANDLING
-// ===================
-
-// 404 Handler für API
+// Error Handling
 app.use('/api/*', (req, res) => {
     res.status(404).json({ 
         error: 'API-Endpunkt nicht gefunden',
@@ -1305,11 +668,9 @@ app.use('/api/*', (req, res) => {
     });
 });
 
-// Fehler Handler
 app.use((err, req, res, next) => {
     console.error('Server Error:', err.stack);
     
-    // Log error to database if possible
     if (req.session && req.session.user) {
         logWebAction(req.session.user.id, 'ERROR', `Server Error: ${err.message}`);
     }
@@ -1324,7 +685,6 @@ app.use((err, req, res, next) => {
     }
 });
 
-// 404 Handler für normale Routen
 app.use((req, res) => {
     if (req.path.startsWith('/api/')) {
         res.status(404).json({ error: 'API-Endpunkt nicht gefunden' });
@@ -1335,10 +695,6 @@ app.use((req, res) => {
         });
     }
 });
-
-// ===================
-// SERVER START
-// ===================
 
 // Graceful Shutdown Handler
 process.on('SIGINT', () => {
@@ -1367,16 +723,13 @@ process.on('SIGTERM', () => {
     });
 });
 
-// Unhandled Promise Rejections
 process.on('unhandledRejection', (reason, promise) => {
     console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-// Uncaught Exceptions
 process.on('uncaughtException', (error) => {
     console.error('❌ Uncaught Exception:', error);
     
-    // Try to close database before exit
     db.close(() => {
         process.exit(1);
     });
@@ -1406,5 +759,12 @@ server.on('error', (err) => {
     process.exit(1);
 });
 
-// Für Tests und andere Module
-module.exports = app;
+// Exportiere Funktionen für API
+module.exports = { 
+    app, 
+    db, 
+    requireAuth, 
+    logWebAction, 
+    sendCommandToBot, 
+    waitForCommandResult 
+};
