@@ -18,12 +18,14 @@ async function question(prompt) {
 }
 
 async function setup() {
-    console.log('🚀 === 14th Squad Bot Setup ===\n');
+    console.log('🚀 === 14th Squad Bot Setup v1.1 ===\n');
     
     // Begrüßung und Info
     console.log('Willkommen beim 14th Squad Management System!');
     console.log('Dieses Setup wird folgendes konfigurieren:');
     console.log('  • Datenbank-Tabellen erstellen');
+    console.log('  • Discord Avatar Support hinzufügen');
+    console.log('  • Performance-Optimierungen');
     console.log('  • Admin-Benutzer für Web-Interface');
     console.log('  • Discord Bot Konfiguration');
     console.log('  • 14th Squad spezifische Einstellungen\n');
@@ -36,23 +38,26 @@ async function setup() {
         return;
     }
     
-    console.log('\n1. Erstelle Datenbank-Tabellen...');
+    console.log('\n1. Erstelle erweiterte Datenbank-Tabellen...');
     
-    console.log('1. Erstelle Datenbank-Tabellen...');
-    
-    // Erstelle alle Tabellen
+    // Erstelle alle Tabellen mit verbessertem Schema
     db.serialize(async () => {
-        // Benutzer Tabelle
+        console.log('   📊 Erstelle Haupttabellen...');
+        
+        // Erweiterte Benutzer Tabelle mit Avatar-Support
         db.run(`CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             username TEXT,
             verification_code TEXT,
             verified BOOLEAN DEFAULT 0,
             joined_at DATETIME,
-            personal_channel_id TEXT
+            personal_channel_id TEXT,
+            avatar_hash TEXT,
+            discriminator TEXT,
+            last_seen DATETIME
         )`);
         
-        // Nachrichten Log
+        // Erweiterte Nachrichten Log mit Avatar-Daten
         db.run(`CREATE TABLE IF NOT EXISTS message_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             message_id TEXT,
@@ -64,10 +69,12 @@ async function setup() {
             attachments TEXT,
             timestamp DATETIME,
             edited BOOLEAN DEFAULT 0,
-            deleted BOOLEAN DEFAULT 0
+            deleted BOOLEAN DEFAULT 0,
+            user_avatar_hash TEXT,
+            user_discriminator TEXT
         )`);
         
-        // Tickets
+        // Tickets Tabelle
         db.run(`CREATE TABLE IF NOT EXISTS tickets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticket_id TEXT UNIQUE,
@@ -106,6 +113,7 @@ async function setup() {
             timestamp DATETIME
         )`);
 
+        // User Sessions für erweiterte Sicherheit
         db.run(`CREATE TABLE IF NOT EXISTS user_sessions (
             session_id TEXT PRIMARY KEY,
             user_id INTEGER,
@@ -116,15 +124,151 @@ async function setup() {
             FOREIGN KEY (user_id) REFERENCES web_users (id) ON DELETE CASCADE
         )`);
 
+        // Bot Commands für Server-Bot Kommunikation
+        db.run(`CREATE TABLE IF NOT EXISTS bot_commands (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            command_type TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            parameters TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            executed_at DATETIME,
+            result TEXT,
+            retry_count INTEGER DEFAULT 0,
+            last_error TEXT
+        )`);
+
+        // Avatar Cache für bessere Performance
+        db.run(`CREATE TABLE IF NOT EXISTS avatar_cache (
+            user_id TEXT PRIMARY KEY,
+            avatar_hash TEXT,
+            discriminator TEXT,
+            username TEXT,
+            cached_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            expires_at DATETIME
+        )`);
+
+        console.log('   🔧 Erstelle Performance-Indizes...');
+        
+        // Performance-Indizes
+        db.run(`CREATE INDEX IF NOT EXISTS idx_users_avatar ON users(id, avatar_hash)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_users_verified ON users(verified, joined_at)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_message_logs_channel_time ON message_logs(channel_id, timestamp)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_message_logs_user ON message_logs(user_id, timestamp)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status, created_at)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_tickets_user ON tickets(user_id, created_at)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_bot_commands_status ON bot_commands(status, created_at)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_avatar_cache_expires ON avatar_cache(expires_at)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_web_logs_user_time ON web_logs(user_id, timestamp)`);
+
+        console.log('   📈 Erstelle Datenbankviews...');
         
-        console.log('✅ Datenbank-Tabellen erstellt.\n');
+        // User-Statistiken View
+        db.run(`CREATE VIEW IF NOT EXISTS user_stats AS
+        SELECT 
+            u.id,
+            u.username,
+            u.avatar_hash,
+            u.discriminator,
+            u.verified,
+            u.joined_at,
+            u.last_seen,
+            COUNT(DISTINCT ml.id) as message_count,
+            COUNT(DISTINCT t.id) as ticket_count,
+            COUNT(DISTINCT tc.channel_id) as temp_channel_count,
+            MAX(ml.timestamp) as last_message_at
+        FROM users u
+        LEFT JOIN message_logs ml ON u.id = ml.user_id AND ml.user_id != 'SYSTEM'
+        LEFT JOIN tickets t ON u.id = t.user_id
+        LEFT JOIN temp_channels tc ON u.id = tc.owner_id
+        GROUP BY u.id`);
+
+        // Activity Summary View
+        db.run(`CREATE VIEW IF NOT EXISTS activity_summary AS
+        SELECT 
+            'message' as activity_type,
+            username as actor,
+            channel_name as target,
+            content as details,
+            timestamp,
+            'fas fa-comment' as icon,
+            'info' as color,
+            user_id
+        FROM message_logs 
+        WHERE user_id != 'SYSTEM' AND content IS NOT NULL AND content != ''
+        
+        UNION ALL
+        
+        SELECT 
+            'ticket_created' as activity_type,
+            (SELECT username FROM users WHERE id = tickets.user_id) as actor,
+            ticket_id as target,
+            'Ticket erstellt' as details,
+            created_at as timestamp,
+            'fas fa-ticket-alt' as icon,
+            'success' as color,
+            user_id
+        FROM tickets
+        
+        UNION ALL
+        
+        SELECT 
+            'user_verified' as activity_type,
+            username as actor,
+            'Server' as target,
+            'Erfolgreich verifiziert' as details,
+            joined_at as timestamp,
+            'fas fa-user-check' as icon,
+            'success' as color,
+            id as user_id
+        FROM users 
+        WHERE verified = 1`);
+
+        console.log('   🔄 Führe Datenbankschema-Updates durch...');
+        
+        // Schema-Updates für bestehende Installationen
+        const schemaUpdates = [
+            'ALTER TABLE users ADD COLUMN avatar_hash TEXT',
+            'ALTER TABLE users ADD COLUMN discriminator TEXT', 
+            'ALTER TABLE users ADD COLUMN last_seen DATETIME',
+            'ALTER TABLE message_logs ADD COLUMN user_avatar_hash TEXT',
+            'ALTER TABLE message_logs ADD COLUMN user_discriminator TEXT',
+            'ALTER TABLE bot_commands ADD COLUMN retry_count INTEGER DEFAULT 0',
+            'ALTER TABLE bot_commands ADD COLUMN last_error TEXT'
+        ];
+
+        for (const update of schemaUpdates) {
+            db.run(update, (err) => {
+                if (err && !err.message.includes('duplicate column name')) {
+                    console.log(`   ⚠️  Schema Update: ${err.message}`);
+                }
+            });
+        }
+
+        console.log('   ✅ Datenbank-Schema erfolgreich erstellt!\n');
         
         console.log('2. Erstelle Admin-Benutzer für Web-Interface...');
         
         const adminUsername = await question('Admin Benutzername: ');
-        const adminPassword = await question('Admin Passwort: ');
+        
+        // Validierung
+        if (!adminUsername || adminUsername.length < 3) {
+            console.log('❌ Benutzername muss mindestens 3 Zeichen lang sein!');
+            rl.close();
+            db.close();
+            return;
+        }
+
+        const adminPassword = await question('Admin Passwort (min. 6 Zeichen): ');
+        
+        if (!adminPassword || adminPassword.length < 6) {
+            console.log('❌ Passwort muss mindestens 6 Zeichen lang sein!');
+            rl.close();
+            db.close();
+            return;
+        }
         
         const passwordHash = await bcrypt.hash(adminPassword, 12);
         const uniquePassword = crypto.randomBytes(6).toString('hex').toUpperCase();
@@ -139,11 +283,17 @@ async function setup() {
                     console.log('✅ Admin-Benutzer erfolgreich erstellt!');
                     console.log(`   📋 Login-Daten:`);
                     console.log(`   👤 Benutzername: ${adminUsername}`);
+                    console.log(`   🔐 Passwort: ${adminPassword}`);
                     console.log(`   🔑 Unique Password: ${uniquePassword}`);
                     console.log('');
-                    console.log('   ⚠️  WICHTIG: Speichere das Unique Password sicher!');
-                    console.log('   💾 Du findest es auch in der Datenbank oder im Web-Interface unter "Benutzer"');
+                    console.log('   ⚠️  WICHTIG: Speichere diese Daten sicher!');
+                    console.log('   💾 Du findest das Unique Password auch später im Web-Interface unter "Benutzer"');
                     console.log('');
+
+                    // Erstelle einen System-Log Eintrag
+                    db.run(`INSERT INTO web_logs (user_id, action, details, timestamp) VALUES (?, ?, ?, ?)`,
+                        [this.lastID, 'SETUP_COMPLETED', 'Initiales Setup abgeschlossen', new Date().toISOString()]
+                    );
                 }
                 
                 setupConfig();
@@ -166,15 +316,7 @@ async function setupConfig() {
             console.log('✅ Bestehende Konfiguration wird beibehalten.');
             console.log('📝 Du kannst die config.js manuell bearbeiten falls nötig.\n');
             
-            console.log('=== Setup abgeschlossen! ===');
-            console.log('\nNächste Schritte:');
-            console.log('1. npm install - Abhängigkeiten installieren (falls noch nicht gemacht)');
-            console.log('2. config.js überprüfen - Stelle sicher dass alle IDs korrekt sind');
-            console.log('3. npm start - Bot und Web-Interface starten');
-            console.log('4. Web-Interface: http://localhost:3000');
-            
-            rl.close();
-            db.close();
+            await finalizeSetup();
             return;
         }
         
@@ -219,6 +361,11 @@ async function setupConfig() {
     console.log('\n⚙️ Server-Einstellungen:');
     const webPort = await question('Web-Interface Port (Standard: 3000): ') || '3000';
     
+    // Avatar-Einstellungen
+    console.log('\n🖼️ Avatar-Einstellungen:');
+    const enableAvatars = await question('Discord Avatar Support aktivieren? (j/n, Standard: j): ') || 'j';
+    const avatarCacheTime = await question('Avatar Cache Zeit in Stunden (Standard: 24): ') || '24';
+    
     // Validierung
     const requiredFields = {
         'Bot Token': botToken,
@@ -241,8 +388,8 @@ async function setupConfig() {
         return;
     }
     
-    // Erstelle Config-Datei
-    const configContent = `// 14th Squad Bot Konfiguration
+    // Erstelle erweiterte Config-Datei
+    const configContent = `// 14th Squad Bot Konfiguration v1.1
 // Generiert am: ${new Date().toLocaleString('de-DE')}
 
 module.exports = {
@@ -267,10 +414,27 @@ module.exports = {
     // === Web-Interface ===
     WEB_PORT: ${parseInt(webPort) || 3000},
     
+    // === Avatar System (Neu in v1.1) ===
+    ENABLE_AVATARS: ${enableAvatars.toLowerCase().startsWith('j') ? 'true' : 'false'},
+    AVATAR_CACHE_HOURS: ${parseInt(avatarCacheTime) || 24},
+    AVATAR_DEFAULT_SIZE: 128,
+    AVATAR_BATCH_SIZE: 50,
+    
+    // === Performance Settings ===
+    COMMAND_TIMEOUT: 30000,
+    AVATAR_SYNC_INTERVAL: 6 * 60 * 60 * 1000, // 6 Stunden
+    SESSION_CLEANUP_INTERVAL: 60 * 60 * 1000, // 1 Stunde
+    
     // === 14th Squad Branding ===
     SERVER_NAME: '14th Squad',
     PRIMARY_COLOR: '#ff0066',
-    SECONDARY_COLOR: '#cc0052'
+    SECONDARY_COLOR: '#cc0052',
+    VERSION: '1.1.0',
+    
+    // === Debug-Einstellungen ===
+    DEBUG_MODE: false,
+    LOG_AVATAR_OPERATIONS: true,
+    LOG_COMMAND_OPERATIONS: true
 };`;
     
     try {
@@ -284,28 +448,113 @@ module.exports = {
         return;
     }
     
-    console.log('\n=== Setup abgeschlossen! ===');
+    await finalizeSetup();
+}
+
+async function finalizeSetup() {
+    console.log('\n🔧 Führe abschließende Optimierungen durch...');
+    
+    // Datenbankoptimierungen
+    db.run('PRAGMA journal_mode=WAL;');
+    db.run('PRAGMA synchronous=NORMAL;');
+    db.run('PRAGMA cache_size=10000;');
+    db.run('PRAGMA temp_store=memory;');
+    
+    // Cleanup alte Sessions
+    db.run(`DELETE FROM user_sessions WHERE expires_at < datetime('now')`);
+    
+    // Avatar Cache Cleanup
+    db.run(`DELETE FROM avatar_cache WHERE expires_at < datetime('now')`);
+    
+    console.log('\n=== Setup erfolgreich abgeschlossen! ===');
     console.log('\n📋 Zusammenfassung:');
-    console.log(`   🤖 Bot Token: ${botToken.substring(0, 10)}...`);
-    console.log(`   🏠 Server: ${guildId}`);
-    console.log(`   🌐 Web-Port: ${webPort}`);
+    console.log('   ✅ Erweiterte Datenbank erstellt');
+    console.log('   ✅ Discord Avatar Support aktiviert');
+    console.log('   ✅ Performance-Optimierungen angewendet');
+    console.log('   ✅ Admin-Benutzer erstellt');
+    console.log('   ✅ Bot-Konfiguration gespeichert');
     
     console.log('\n🚀 Nächste Schritte:');
     console.log('   1. npm install               - Dependencies installieren');
     console.log('   2. npm start                 - Bot und Web-Interface starten');
-    console.log('   3. http://localhost:' + webPort + '       - Web-Interface öffnen');
+    console.log('   3. http://localhost:3000     - Web-Interface öffnen');
+    
+    console.log('\n🆕 Neue Features in v1.1:');
+    console.log('   🖼️  Discord Avatar Support');
+    console.log('   ⚡ Verbesserte Performance');
+    console.log('   🔒 Erweiterte Session-Verwaltung');
+    console.log('   📊 Datenbankviews für Statistiken');
+    console.log('   🔄 Bot-Server Kommunikation');
     
     console.log('\n💡 Tipps:');
     console.log('   • Überprüfe alle Discord-IDs in der config.js');
     console.log('   • Stelle sicher dass der Bot die nötigen Rechte hat');
     console.log('   • Teste zuerst das Verifikationssystem');
+    console.log('   • Avatar-Synchronisation erfolgt automatisch alle 6 Stunden');
     
     console.log('\n🔍 Bei Problemen:');
-    console.log('   npm run check-password       - Admin-Passwort anzeigen');
     console.log('   node setup.js                - Setup erneut ausführen');
+    console.log('   npm run check-password       - Admin-Passwort anzeigen');
+    console.log('   http://localhost:3000/health - System-Status prüfen');
+    
+    console.log('\n🛠️ Verwaltungsbefehle:');
+    console.log('   GET  /admin/avatar-stats     - Avatar-Statistiken');
+    console.log('   POST /admin/sync-avatars     - Manuelle Avatar-Sync');
+    console.log('   GET  /admin/system-status    - Ausführlicher System-Status');
     
     rl.close();
     db.close();
 }
 
-setup().catch(console.error);
+// Hilfsfunktion für Datenbankbereinigung
+async function cleanupDatabase() {
+    console.log('🧹 Bereinige Datenbank...');
+    
+    // Alte Sessions löschen
+    db.run(`DELETE FROM user_sessions WHERE expires_at < datetime('now')`);
+    
+    // Alte Avatar Cache Einträge löschen
+    db.run(`DELETE FROM avatar_cache WHERE expires_at < datetime('now')`);
+    
+    // Abgeschlossene Bot Commands älter als 7 Tage löschen
+    db.run(`DELETE FROM bot_commands 
+            WHERE status IN ('completed', 'failed') 
+            AND created_at < datetime('now', '-7 days')`);
+    
+    // Alte Web Logs bereinigen (älter als 30 Tage)
+    db.run(`DELETE FROM web_logs 
+            WHERE timestamp < datetime('now', '-30 days')`);
+    
+    console.log('✅ Datenbankbereinigung abgeschlossen');
+}
+
+// Hilfsfunktion für Admin-Passwort anzeigen
+async function showAdminPassword() {
+    console.log('🔑 Admin-Passwort Information:\n');
+    
+    db.get(`SELECT username, unique_password, created_at FROM web_users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1`, 
+        (err, admin) => {
+            if (err || !admin) {
+                console.log('❌ Kein Admin-Benutzer gefunden!');
+                console.log('💡 Führe das Setup erneut aus: node setup.js');
+            } else {
+                console.log(`👤 Admin-Benutzername: ${admin.username}`);
+                console.log(`🔑 Unique Password: ${admin.unique_password}`);
+                console.log(`📅 Erstellt: ${new Date(admin.created_at).toLocaleString('de-DE')}`);
+                console.log('\n💾 Diese Informationen findest du auch im Web-Interface unter "Benutzer"');
+            }
+            
+            db.close();
+        }
+    );
+}
+
+// Command Line Interface
+const args = process.argv.slice(2);
+if (args[0] === 'cleanup') {
+    cleanupDatabase();
+} else if (args[0] === 'show-password') {
+    showAdminPassword();
+} else {
+    setup().catch(console.error);
+}

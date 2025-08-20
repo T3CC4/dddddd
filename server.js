@@ -622,7 +622,7 @@ app.get('/tickets/:ticketId', requireAuth(), (req, res) => {
 // User Management (nur Admin)
 app.get('/users', requireAuth('admin'), (req, res) => {
     // Lade Discord-Benutzer mit Avatar-Daten
-    db.all(`
+    const discordQuery = `
         SELECT 
             u.*,
             (SELECT COUNT(*) FROM message_logs WHERE user_id = u.id AND user_id != 'SYSTEM') as message_count,
@@ -630,28 +630,58 @@ app.get('/users', requireAuth('admin'), (req, res) => {
             (SELECT COUNT(*) FROM temp_channels WHERE owner_id = u.id) as voice_channel_count
         FROM users u 
         ORDER BY u.joined_at DESC
-    `, (err, discordUsers) => {
+    `;
+
+    db.all(discordQuery, (err, discordUsers) => {
         if (err) {
-            console.error('Discord users query error:', err);
-            discordUsers = [];
+            console.error('❌ Discord users query error:', err);
+            console.error('Query was:', discordQuery);
+            
+            // Fallback: Versuche einfache Query
+            db.all('SELECT * FROM users ORDER BY joined_at DESC', (fallbackErr, fallbackUsers) => {
+                if (fallbackErr) {
+                    console.error('❌ Fallback query also failed:', fallbackErr);
+                    discordUsers = [];
+                } else {
+                    console.log(`✅ Fallback query found ${fallbackUsers.length} users`);
+                    discordUsers = fallbackUsers.map(user => ({
+                        ...user,
+                        message_count: 0,
+                        ticket_count: 0,
+                        voice_channel_count: 0
+                    }));
+                }
+                continueWithWebUsers();
+            });
+        } else {
+            console.log(`✅ Discord users query found ${discordUsers.length} users`);
+            continueWithWebUsers();
         }
         
-        // Lade Web-Benutzer
-        db.all(`SELECT * FROM web_users ORDER BY created_at DESC`, (err, webUsers) => {
-            if (err) {
-                console.error('Web users query error:', err);
-                webUsers = [];
-            }
-            
-            logWebAction(req.session.user.id, 'VIEW_USERS', 'Benutzerverwaltung aufgerufen');
-            
-            res.render('users', { 
-                user: req.session.user,
-                discordUsers: discordUsers || [],
-                webUsers: webUsers || [],
-                title: 'Benutzerverwaltung - 14th Squad Management'
+        function continueWithWebUsers() {
+            // Lade Web-Benutzer
+            db.all(`SELECT * FROM web_users ORDER BY created_at DESC`, (err, webUsers) => {
+                if (err) {
+                    console.error('❌ Web users query error:', err);
+                    webUsers = [];
+                } else {
+                    console.log(`✅ Web users query found ${webUsers.length} users`);
+                }
+                
+                logWebAction(req.session.user.id, 'VIEW_USERS', 'Benutzerverwaltung aufgerufen');
+                
+                console.log('📊 Rendering users template with:');
+                console.log(`   - Discord Users: ${discordUsers.length}`);
+                console.log(`   - Web Users: ${webUsers.length}`);
+                
+                res.render('users', { 
+                    user: req.session.user,
+                    discordUsers: discordUsers || [],
+                    webUsers: webUsers || [],
+                    title: 'Benutzerverwaltung - 14th Squad Management'
+                });
             });
-        });
+        }
     });
 });
 
