@@ -358,6 +358,16 @@ client.once('ready', () => {
     // Starte Command Processor
     startCommandProcessor();
     
+    // Starte Avatar Sync nach 30 Sekunden
+    setTimeout(() => {
+        bulkSyncAvatars();
+    }, 30000);
+    
+    // Wiederhole Avatar Sync alle 6 Stunden
+    setInterval(() => {
+        bulkSyncAvatars();
+    }, 6 * 60 * 60 * 1000);
+    
     // Setze Bot-Status
     client.user.setActivity('14th Squad Management', { type: 'WATCHING' });
 });
@@ -367,6 +377,9 @@ client.on('guildMemberAdd', async (member) => {
     const verificationCode = crypto.randomBytes(4).toString('hex').toUpperCase();
     
     try {
+        // Sync Avatar-Daten
+        await syncUserAvatar(member.user);
+        
         // Erstelle persönlichen Channel
         const personalChannel = await member.guild.channels.create({
             name: `welcome-${member.user.username}`,
@@ -394,13 +407,25 @@ client.on('guildMemberAdd', async (member) => {
         
         await personalChannel.send({ embeds: [embed] });
         
-        // Speichere in Datenbank
-        db.run(`INSERT OR REPLACE INTO users (id, username, verification_code, verified, joined_at, personal_channel_id) 
-                VALUES (?, ?, ?, ?, ?, ?)`,
-            [member.user.id, member.user.username, verificationCode, 0, new Date().toISOString(), personalChannel.id]
+        // Speichere in Datenbank mit Avatar-Daten
+        db.run(`INSERT OR REPLACE INTO users 
+                (id, username, verification_code, verified, joined_at, personal_channel_id, avatar_hash, discriminator, last_seen) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                member.user.id, 
+                member.user.username, 
+                verificationCode, 
+                0, 
+                new Date().toISOString(), 
+                personalChannel.id,
+                member.user.avatar,
+                member.user.discriminator,
+                new Date().toISOString()
+            ]
         );
         
-        logMessage('SYSTEM', 'System', 'system', 'Neuer Benutzer beigetreten', `${member.user.username} (${member.user.id}) ist dem Server beigetreten.`);
+        logMessage('SYSTEM', 'System', 'system', 'Neuer Benutzer beigetreten', 
+            `${member.user.username} (${member.user.id}) ist dem Server beigetreten.`);
         
         console.log(`👤 Neuer Benutzer: ${member.user.username} | Code: ${verificationCode}`);
     } catch (error) {
@@ -547,19 +572,30 @@ async function sendVoiceControlPanel(channel, member) {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     
+    // Sync Avatar bei jeder Nachricht (throttled)
+    if (!message.author.bot) {
+        await syncUserAvatar(message.author);
+    }
+    
     logMessage(
         message.id,
         message.author.username,
         message.channel.id,
         message.channel.name,
         message.content,
-        message.attachments.map(att => att.url).join(', ')
+        message.attachments.map(att => att.url).join(', '),
+        false,
+        message.author
     );
 });
 
 // Event: Nachrichten bearbeitet
 client.on('messageUpdate', async (oldMessage, newMessage) => {
     if (newMessage.author?.bot) return;
+    
+    if (!newMessage.author.bot) {
+        await syncUserAvatar(newMessage.author);
+    }
     
     logMessage(
         newMessage.id,
@@ -568,7 +604,8 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
         newMessage.channel.name,
         `[BEARBEITET] ${newMessage.content}`,
         '',
-        true
+        true,
+        newMessage.author
     );
 });
 
@@ -580,11 +617,26 @@ client.on('messageDelete', async (message) => {
 });
 
 // Hilfsfunktion: Nachricht loggen
-function logMessage(messageId, username, channelId, channelName, content, attachments = '', edited = false) {
+function logMessage(messageId, username, channelId, channelName, content, attachments = '', edited = false, user = null) {
+    const avatarHash = user?.avatar || null;
+    const discriminator = user?.discriminator || null;
+    
     db.run(`INSERT INTO message_logs 
-            (message_id, user_id, username, channel_id, channel_name, content, attachments, timestamp, edited) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [messageId, messageId === 'SYSTEM' ? 'SYSTEM' : messageId, username, channelId, channelName, content, attachments, new Date().toISOString(), edited]
+            (message_id, user_id, username, channel_id, channel_name, content, attachments, timestamp, edited, user_avatar_hash, user_discriminator) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            messageId, 
+            messageId === 'SYSTEM' ? 'SYSTEM' : messageId, 
+            username, 
+            channelId, 
+            channelName, 
+            content, 
+            attachments, 
+            new Date().toISOString(), 
+            edited,
+            avatarHash,
+            discriminator
+        ]
     );
 }
 
@@ -1097,6 +1149,67 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
+async function syncUserAvatar(user) {
+    try {
+        const avatarHash = user.avatar;
+        const discriminator = user.discriminator;
+        const username = user.username || user.globalName;
+        
+        db.run(`
+            UPDATE users 
+            SET avatar_hash = ?, discriminator = ?, username = ?, last_seen = ?
+            WHERE id = ?
+        `, [avatarHash, discriminator, username, new Date().toISOString(), user.id], (err) => {
+            if (err) {
+                console.error('Avatar sync error:', err);
+            } else {
+                console.log(`✅ Avatar synced for ${username} (${user.id})`);
+            }
+        });
+    } catch (error) {
+        console.error('Avatar sync error:', error);
+    }
+}
+
+async function syncAllAvatarsCommand() {
+    console.log('📤 Manueller Avatar Sync gestartet...');
+    await bulkSyncAvatars();
+}
+
+async function bulkSyncAvatars() {
+    console.log('🔄 Starte Bulk Avatar Sync...');
+    
+    try {
+        const guild = client.guilds.cache.get(CONFIG.GUILD_ID);
+        if (!guild) {
+            console.error('Guild nicht gefunden');
+            return;
+        }
+        
+        // Lade alle Mitglieder
+        const members = await guild.members.fetch();
+        console.log(`📥 ${members.size} Mitglieder gefunden`);
+        
+        let syncCount = 0;
+        for (const [id, member] of members) {
+            if (!member.user.bot) {
+                await syncUserAvatar(member.user);
+                syncCount++;
+                
+                // Pause zwischen Sync-Operationen
+                if (syncCount % 10 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    console.log(`📊 ${syncCount}/${members.size - members.filter(m => m.user.bot).size} Avatare synchronisiert`);
+                }
+            }
+        }
+        
+        console.log(`✅ Bulk Avatar Sync abgeschlossen: ${syncCount} Benutzer`);
+    } catch (error) {
+        console.error('❌ Bulk Avatar Sync Fehler:', error);
+    }
+}
+
 // Error Handling
 process.on('unhandledRejection', error => {
     console.error('❌ Unhandled promise rejection:', error);
@@ -1117,4 +1230,10 @@ process.on('SIGINT', () => {
 // Bot starten
 client.login(CONFIG.BOT_TOKEN);
 
-module.exports = { client, db };
+module.exports = { 
+    client, 
+    db, 
+    syncUserAvatar, 
+    bulkSyncAvatars,
+    syncAllAvatarsCommand
+};

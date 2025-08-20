@@ -105,6 +105,19 @@ async function setup() {
             details TEXT,
             timestamp DATETIME
         )`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS user_sessions (
+            session_id TEXT PRIMARY KEY,
+            user_id INTEGER,
+            device_type TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
+            expires_at DATETIME,
+            FOREIGN KEY (user_id) REFERENCES web_users (id) ON DELETE CASCADE
+        )`);
+
+        db.run(`CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at)`);
         
         console.log('✅ Datenbank-Tabellen erstellt.\n');
         

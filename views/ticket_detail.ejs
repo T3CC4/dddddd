@@ -48,22 +48,47 @@
                         <tr>
                             <td><strong>Benutzer:</strong></td>
                             <td>
-                                <i class="fas fa-user"></i> <%= ticket.user_id %>
-                                <br><small class="text-muted">ID: <%= ticket.user_id %></small>
+                                <div class="d-flex align-items-center gap-2">
+                                    <img src="https://cdn.discordapp.com/embed/avatars/0.png" 
+                                         alt="<%= ticket.user_id %>" 
+                                         class="user-avatar"
+                                         data-user-id="<%= ticket.user_id %>"
+                                         data-username="<%= ticket.user_id %>"
+                                         style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--primary-pink);">
+                                    <div>
+                                        <i class="fas fa-user"></i> <%= ticket.user_id %>
+                                        <br><small class="text-muted">ID: <%= ticket.user_id %></small>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         <tr>
                             <td><strong>Channel ID:</strong></td>
-                            <td><code><%= ticket.channel_id %></code></td>
+                            <td>
+                                <code><%= ticket.channel_id %></code>
+                                <button class="btn btn-link btn-sm p-0 ms-1" onclick="copyToClipboard('<%= ticket.channel_id %>')" title="ID kopieren">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </td>
                         </tr>
                         <tr>
                             <td><strong>Erstellt:</strong></td>
-                            <td><%= new Date(ticket.created_at).toLocaleString('de-DE') %></td>
+                            <td>
+                                <%= new Date(ticket.created_at).toLocaleString('de-DE') %>
+                                <br><small class="text-muted">
+                                    <%= Math.floor((Date.now() - new Date(ticket.created_at)) / (1000 * 60 * 60 * 24)) %> Tage her
+                                </small>
+                            </td>
                         </tr>
                         <% if (ticket.closed_at) { %>
                         <tr>
                             <td><strong>Geschlossen:</strong></td>
-                            <td><%= new Date(ticket.closed_at).toLocaleString('de-DE') %></td>
+                            <td>
+                                <%= new Date(ticket.closed_at).toLocaleString('de-DE') %>
+                                <br><small class="text-muted">
+                                    Dauer: <%= Math.round((new Date(ticket.closed_at) - new Date(ticket.created_at)) / (1000 * 60)) %> Minuten
+                                </small>
+                            </td>
                         </tr>
                         <% } %>
                     </tbody>
@@ -80,28 +105,81 @@
             <div class="card-body">
                 <div class="d-grid gap-2">
                     <% if (ticket.status === 'open') { %>
-                    <button class="btn btn-outline-danger" onclick="closeTicket()">
+                    <button class="btn btn-outline-danger" onclick="closeTicket()" title="Ticket schließen und Discord-Channel löschen">
                         <i class="fas fa-lock"></i> Ticket schließen
                     </button>
                     <% } %>
                     
-                    <% if (ticket.transcript) { %>
-                    <button class="btn btn-outline-success" onclick="downloadTranscript()">
+                    <% if (ticket.transcript || messages.length > 0) { %>
+                    <button class="btn btn-outline-success" onclick="downloadTranscript()" title="Transcript als TXT-Datei herunterladen">
                         <i class="fas fa-download"></i> Transcript herunterladen
                     </button>
-                    <button class="btn btn-outline-info" onclick="viewTranscriptModal()">
+                    <button class="btn btn-outline-info" onclick="viewTranscriptModal()" title="Transcript im Modal anzeigen">
                         <i class="fas fa-eye"></i> Transcript anzeigen
                     </button>
                     <% } %>
                     
-                    <button class="btn btn-outline-secondary" onclick="exportTicketData()">
+                    <button class="btn btn-outline-secondary" onclick="exportTicketData()" title="Alle Ticket-Daten als JSON exportieren">
                         <i class="fas fa-file-export"></i> Daten exportieren
                     </button>
+                    
+                    <% if (ticket.channel_id) { %>
+                    <button class="btn btn-outline-primary" onclick="openDiscordChannel('<%= ticket.channel_id %>')" title="Channel in Discord öffnen">
+                        <i class="fab fa-discord"></i> In Discord öffnen
+                    </button>
+                    <% } %>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Ticket Statistiken (falls Transcript vorhanden) -->
+<% if (messages.length > 0) { %>
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="fas fa-chart-bar"></i> Ticket Statistiken</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-primary"><%= messages.length %></h4>
+                            <small class="text-muted">Nachrichten</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-info">
+                                <%= [...new Set(messages.map(m => m.username))].length %>
+                            </h4>
+                            <small class="text-muted">Teilnehmer</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-warning">
+                                <%= messages.filter(m => m.attachments).length %>
+                            </h4>
+                            <small class="text-muted">Anhänge</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-success">
+                                <%= ticket.closed_at ? Math.round((new Date(ticket.closed_at) - new Date(ticket.created_at)) / (1000 * 60)) : Math.round((Date.now() - new Date(ticket.created_at)) / (1000 * 60)) %>m
+                            </h4>
+                            <small class="text-muted">Dauer</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<% } %>
 
 <!-- Ticket Nachrichten -->
 <div class="card">
@@ -109,58 +187,159 @@
         <h5 class="card-title mb-0">
             <i class="fas fa-comments"></i> Ticket Verlauf
             <span class="badge bg-secondary ms-2"><%= messages.length %></span>
+            <% if (ticket.status === 'open') { %>
+                <span class="live-indicator ms-2" title="Live-Updates für offene Tickets"></span>
+            <% } %>
         </h5>
-        <small class="text-muted">Sortiert nach Zeit</small>
+        <div class="d-flex gap-2 align-items-center">
+            <small class="text-muted">Sortiert nach Zeit</small>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" onclick="scrollToTop()" title="Zum Anfang scrollen">
+                    <i class="fas fa-arrow-up"></i>
+                </button>
+                <button class="btn btn-outline-secondary" onclick="scrollToBottom()" title="Zum Ende scrollen">
+                    <i class="fas fa-arrow-down"></i>
+                </button>
+            </div>
+        </div>
     </div>
-    <div class="card-body">
+    <div class="card-body p-0">
         <% if (messages.length === 0) { %>
-        <div class="text-center py-4">
+        <div class="text-center py-5">
             <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-            <p class="text-muted">Keine Nachrichten in diesem Ticket gefunden.</p>
+            <h5 class="text-muted">Keine Nachrichten gefunden</h5>
+            <p class="text-muted">Dieses Ticket enthält noch keine Nachrichten oder das Transcript ist nicht verfügbar.</p>
+            <% if (ticket.status === 'open') { %>
+            <small class="text-info">
+                <i class="fas fa-info-circle"></i> 
+                Bei offenen Tickets werden Nachrichten automatisch synchronisiert.
+            </small>
+            <% } %>
         </div>
         <% } else { %>
         
-        <div class="ticket-messages" style="max-height: 600px; overflow-y: auto;">
-            <% messages.forEach(function(message, index) { %>
-            <div class="discord-message <%= message.user_id === 'SYSTEM' ? 'system-message' : '' %> <%= message.deleted ? 'deleted-message' : '' %>">
-                <div class="message-avatar">
-                    <% if (message.user_id === 'SYSTEM') { %>
-                        <div class="avatar system-avatar">
-                            <i class="fas fa-cog"></i>
-                        </div>
-                    <% } else { %>
-                        <div class="avatar user-avatar">
-                            <%= message.username.charAt(0).toUpperCase() %>
-                        </div>
-                    <% } %>
-                </div>
+        <div class="ticket-messages" style="max-height: 600px; overflow-y: auto; padding: 1rem;" id="ticketMessages">
+            <% 
+            let lastDate = null;
+            messages.forEach(function(message, index) { 
+                const messageDate = new Date(message.timestamp).toDateString();
+                const showDateDivider = index === 0 || lastDate !== messageDate;
+                lastDate = messageDate;
+            %>
+            
+            <!-- Date Divider -->
+            <% if (showDateDivider) { %>
+            <div class="text-center my-3">
+                <small class="text-muted px-3 py-1" style="background: var(--secondary-bg); border-radius: 12px; border: 1px solid var(--border-color);">
+                    <i class="fas fa-calendar-day"></i>
+                    <%= new Date(message.timestamp).toLocaleDateString('de-DE', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    }) %>
+                </small>
+            </div>
+            <% } %>
+            
+            <div class="discord-message <%= message.user_id === 'SYSTEM' ? 'system-message' : '' %> <%= message.deleted ? 'deleted-message' : '' %> <%= message.edited ? 'edited-message' : '' %>" 
+                 style="margin-bottom: 1rem; padding: 0.75rem; border-radius: 8px; transition: background-color 0.2s ease;"
+                 onmouseenter="this.style.backgroundColor='rgba(255,255,255,0.03)'"
+                 onmouseleave="this.style.backgroundColor='transparent'">
                 
-                <div class="message-content-wrapper">
-                    <div class="message-header">
-                        <span class="message-author <%= message.user_id === 'SYSTEM' ? 'system-author' : '' %>">
-                            <%= message.username %>
-                        </span>
-                        <span class="message-timestamp">
-                            <%= new Date(message.timestamp).toLocaleString('de-DE') %>
-                        </span>
-                        <% if (message.edited) { %>
-                            <span class="badge bg-warning ms-2">bearbeitet</span>
-                        <% } %>
-                        <% if (message.deleted) { %>
-                            <span class="badge bg-danger ms-2">gelöscht</span>
+                <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                    <div class="message-avatar" style="flex-shrink: 0;">
+                        <% if (message.user_id === 'SYSTEM') { %>
+                            <div class="avatar system-avatar" style="width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--warning-color); color: var(--primary-bg); border: 2px solid var(--warning-color);">
+                                <i class="fas fa-cog"></i>
+                            </div>
+                        <% } else { %>
+                            <img src="https://cdn.discordapp.com/embed/avatars/<%= parseInt(message.user_id || '0') % 5 %>.png" 
+                                 alt="<%= message.username %>" 
+                                 class="avatar user-avatar"
+                                 data-user-id="<%= message.user_id %>"
+                                 data-username="<%= message.username %>"
+                                 style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--primary-pink); object-fit: cover; cursor: pointer;"
+                                 title="<%= message.username %>"
+                                 onclick="openDiscordProfile('<%= message.user_id %>')">
                         <% } %>
                     </div>
                     
-                    <div class="message-text">
-                        <%= message.content || '[Nachricht ohne Inhalt]' %>
+                    <div class="message-content-wrapper" style="flex: 1; min-width: 0;">
+                        <div class="message-header" style="display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+                            <span class="message-author <%= message.user_id === 'SYSTEM' ? 'system-author' : '' %>" 
+                                  style="font-weight: 600; color: <%= message.user_id === 'SYSTEM' ? 'var(--warning-color)' : 'var(--text-primary)' %>; cursor: pointer;"
+                                  <% if (message.user_id !== 'SYSTEM') { %>onclick="openDiscordProfile('<%= message.user_id %>')"<% } %>>
+                                <%= message.username %>
+                            </span>
+                            
+                            <% if (message.user_id === 'SYSTEM') { %>
+                                <span class="badge bg-warning text-dark" style="font-size: 0.6rem;">
+                                    <i class="fas fa-robot"></i> BOT
+                                </span>
+                            <% } %>
+                            
+                            <span class="message-timestamp" style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);" title="<%= new Date(message.timestamp).toISOString() %>">
+                                <%= new Date(message.timestamp).toLocaleString('de-DE') %>
+                            </span>
+                            
+                            <% if (message.edited && !message.deleted) { %>
+                                <span class="badge bg-info" style="font-size: 0.6rem;" title="Diese Nachricht wurde bearbeitet">
+                                    <i class="fas fa-pencil-alt"></i> bearbeitet
+                                </span>
+                            <% } %>
+                            
+                            <% if (message.deleted) { %>
+                                <span class="badge bg-danger" style="font-size: 0.6rem;" title="Diese Nachricht wurde gelöscht">
+                                    <i class="fas fa-trash"></i> gelöscht
+                                </span>
+                            <% } %>
+                            
+                            <!-- Message Actions -->
+                            <div class="message-actions ms-auto" style="opacity: 0; transition: opacity 0.2s ease;">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="copyMessageContent('<%= (message.content || '').replace(/'/g, "\\'") %>')" title="Nachricht kopieren">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                    <% if (message.user_id !== 'SYSTEM') { %>
+                                    <button class="btn btn-outline-info btn-sm" onclick="copyToClipboard('<%= message.user_id %>')" title="User ID kopieren">
+                                        <i class="fas fa-user"></i>
+                                    </button>
+                                    <% } %>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="message-text" style="word-wrap: break-word; white-space: pre-wrap; line-height: 1.4; color: var(--text-primary); <%= message.deleted ? 'opacity: 0.6; font-style: italic;' : '' %>">
+                            <% if (message.deleted) { %>
+                                <i class="fas fa-trash text-danger me-1"></i>
+                                <span class="text-muted">[Diese Nachricht wurde gelöscht]</span>
+                            <% } else { %>
+                                <%= message.content || '[Nachricht ohne Inhalt]' %>
+                            <% } %>
+                        </div>
+                        
+                        <% if (message.attachments && message.attachments.trim() !== '') { %>
+                        <div class="message-attachments" style="margin-top: 0.75rem; padding: 0.5rem; background: rgba(255, 255, 255, 0.02); border-radius: 6px; border-left: 3px solid var(--primary-pink);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-paperclip text-primary"></i>
+                                <small class="text-muted">
+                                    <strong>Anhänge:</strong> 
+                                    <% 
+                                    const attachments = message.attachments.split(', ').filter(att => att.trim() !== '');
+                                    attachments.forEach(function(attachment, attIndex) { 
+                                    %>
+                                        <a href="<%= attachment %>" target="_blank" class="text-decoration-none ms-1" title="Anhang öffnen">
+                                            <i class="fas fa-external-link-alt"></i>
+                                            Anhang <%= attIndex + 1 %>
+                                        </a>
+                                        <% if (attIndex < attachments.length - 1) { %>, <% } %>
+                                    <% }); %>
+                                </small>
+                            </div>
+                        </div>
+                        <% } %>
                     </div>
-                    
-                    <% if (message.attachments) { %>
-                    <div class="message-attachments">
-                        <i class="fas fa-paperclip"></i> 
-                        <small class="text-muted">Anhänge: <%= message.attachments %></small>
-                    </div>
-                    <% } %>
                 </div>
             </div>
             <% }); %>
@@ -168,25 +347,54 @@
         
         <% } %>
     </div>
+    <% if (messages.length > 0) { %>
+    <div class="card-footer bg-transparent">
+        <div class="d-flex justify-content-between align-items-center">
+            <small class="text-muted">
+                <i class="fas fa-info-circle"></i>
+                <%= messages.length %> Nachrichten von <%= [...new Set(messages.map(m => m.username))].length %> Teilnehmern
+            </small>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" onclick="copyAllMessages()" title="Alle Nachrichten kopieren">
+                    <i class="fas fa-copy"></i> Alle kopieren
+                </button>
+                <button class="btn btn-outline-info" onclick="viewTranscriptModal()" title="Im Modal anzeigen">
+                    <i class="fas fa-expand"></i> Vollansicht
+                </button>
+            </div>
+        </div>
+    </div>
+    <% } %>
 </div>
 
 <!-- Transcript Modal -->
-<div class="modal fade" id="transcriptModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade" id="transcriptModal" tabindex="-1" aria-labelledby="transcriptModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content bg-dark">
             <div class="modal-header">
-                <h5 class="modal-title">Ticket Transcript</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title" id="transcriptModalLabel">
+                    <i class="fas fa-file-alt"></i> Ticket Transcript: <code><%= ticket.ticket_id %></code>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Schließen"></button>
             </div>
-            <div class="modal-body">
-                <div id="transcriptContent" style="max-height: 400px; overflow-y: auto;">
+            <div class="modal-body p-0">
+                <div id="transcriptContent" style="max-height: 70vh; overflow-y: auto; padding: 1rem;">
                     <!-- Transcript wird hier geladen -->
+                    <div class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x text-muted mb-3"></i>
+                        <p class="text-muted">Lade Transcript...</p>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Schließen
+                </button>
                 <button type="button" class="btn btn-success" onclick="downloadTranscript()">
                     <i class="fas fa-download"></i> Herunterladen
+                </button>
+                <button type="button" class="btn btn-info" onclick="exportTicketData()">
+                    <i class="fas fa-file-export"></i> Daten exportieren
                 </button>
             </div>
         </div>
@@ -195,4 +403,5 @@
 
 <link href="/css/tickets.css" rel="stylesheet">
 
+<script src="/js/discord-avatars.js"></script>
 <script src="/js/ticket_detail.js"></script>

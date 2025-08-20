@@ -282,6 +282,51 @@ router.post('/tickets/:ticketId/close', requireAuth(), async (req, res) => {
     }
 });
 
+router.get('/tickets/:ticketId/details', requireAuth(), (req, res) => {
+    const ticketId = req.params.ticketId;
+    
+    db.get(`SELECT * FROM tickets WHERE ticket_id = ?`, [ticketId], (err, ticket) => {
+        if (err) {
+            return res.status(500).json({ error: 'Datenbankfehler' });
+        }
+        
+        if (!ticket) {
+            return res.status(404).json({ error: 'Ticket nicht gefunden' });
+        }
+        
+        // Lade auch User-Informationen
+        db.get(`SELECT * FROM users WHERE id = ?`, [ticket.user_id], (err, user) => {
+            if (err) {
+                console.error('User lookup error:', err);
+            }
+            
+            // Lade Nachrichten-Statistiken
+            db.all(`
+                SELECT 
+                    COUNT(*) as message_count,
+                    COUNT(DISTINCT user_id) as participant_count,
+                    COUNT(CASE WHEN attachments IS NOT NULL AND attachments != '' THEN 1 END) as attachment_count
+                FROM message_logs 
+                WHERE channel_id = ?
+            `, [ticket.channel_id], (err, stats) => {
+                if (err) {
+                    console.error('Stats error:', err);
+                    stats = [{ message_count: 0, participant_count: 0, attachment_count: 0 }];
+                }
+                
+                res.json({
+                    success: true,
+                    ticket: {
+                        ...ticket,
+                        user: user || null,
+                        stats: stats[0]
+                    }
+                });
+            });
+        });
+    });
+});
+
 // Ticket Transcript herunterladen - VERBESSERT
 router.get('/tickets/:ticketId/transcript', requireAuth(), (req, res) => {
     const ticketId = req.params.ticketId;
@@ -295,19 +340,33 @@ router.get('/tickets/:ticketId/transcript', requireAuth(), (req, res) => {
             return res.status(404).json({ error: 'Ticket nicht gefunden' });
         }
         
-        if (!ticket.transcript) {
-            return res.status(404).json({ error: 'Kein Transcript verfügbar' });
-        }
-        
-        try {
-            const messages = JSON.parse(ticket.transcript);
+        // Lade Nachrichten direkt aus message_logs
+        db.all(`
+            SELECT ml.*, u.username, u.avatar_hash, u.discriminator
+            FROM message_logs ml
+            LEFT JOIN users u ON ml.user_id = u.id
+            WHERE ml.channel_id = ? 
+            ORDER BY ml.timestamp ASC
+        `, [ticket.channel_id], (err, messages) => {
+            if (err) {
+                console.error('Messages error:', err);
+                messages = [];
+            }
+            
+            // Falls keine Nachrichten in message_logs, versuche transcript
+            if (messages.length === 0 && ticket.transcript) {
+                try {
+                    messages = JSON.parse(ticket.transcript);
+                } catch (parseError) {
+                    console.error('Transcript parse error:', parseError);
+                    messages = [];
+                }
+            }
             
             // Erstelle detailliertes Transcript
             let transcriptText = `14th Squad - Ticket Transcript\n`;
             transcriptText += `${'='.repeat(60)}\n`;
             transcriptText += `Ticket ID: ${ticket.ticket_id}\n`;
-            transcriptText += `Benutzer: ${ticket.user_id}\n`;
-            transcriptText += `Channel: ${ticket.channel_id}\n`;
             transcriptText += `Status: ${ticket.status}\n`;
             transcriptText += `Erstellt: ${new Date(ticket.created_at).toLocaleString('de-DE')}\n`;
             if (ticket.closed_at) {
@@ -318,8 +377,11 @@ router.get('/tickets/:ticketId/transcript', requireAuth(), (req, res) => {
             
             messages.forEach((msg, index) => {
                 const timestamp = new Date(msg.timestamp).toLocaleString('de-DE');
-                transcriptText += `[${index + 1}] [${timestamp}] ${msg.username}:\n`;
-                transcriptText += `${msg.content || '[Keine Nachricht]'}\n`;
+                const username = msg.username || 'Unbekannt';
+                const content = msg.content || '[Keine Nachricht]';
+                
+                transcriptText += `[${index + 1}] [${timestamp}] ${username}:\n`;
+                transcriptText += `${content}\n`;
                 
                 if (msg.attachments) {
                     transcriptText += `    📎 Anhänge: ${msg.attachments}\n`;
@@ -346,11 +408,7 @@ router.get('/tickets/:ticketId/transcript', requireAuth(), (req, res) => {
             res.send(transcriptText);
             
             logWebAction(req.session.user.id, 'DOWNLOAD_TRANSCRIPT', `Transcript für Ticket ${ticketId} heruntergeladen`);
-            
-        } catch (error) {
-            console.error('Transcript parse error:', error);
-            res.status(500).json({ error: 'Fehler beim Verarbeiten des Transcripts' });
-        }
+        });
     });
 });
 
@@ -359,7 +417,7 @@ router.get('/tickets/:ticketId/export', requireAuth(), (req, res) => {
     const ticketId = req.params.ticketId;
     
     db.get(`
-        SELECT t.*, u.username 
+        SELECT t.*, u.username, u.avatar_hash, u.discriminator
         FROM tickets t 
         LEFT JOIN users u ON t.user_id = u.id 
         WHERE t.ticket_id = ?
@@ -372,18 +430,38 @@ router.get('/tickets/:ticketId/export', requireAuth(), (req, res) => {
             return res.status(404).json({ error: 'Ticket nicht gefunden' });
         }
         
-        // Lade alle Nachrichten für dieses Ticket
+        // Lade alle Nachrichten mit User-Infos
         db.all(`
-            SELECT * FROM message_logs 
-            WHERE channel_id = ? 
-            ORDER BY timestamp ASC
+            SELECT ml.*, u.username, u.avatar_hash, u.discriminator
+            FROM message_logs ml
+            LEFT JOIN users u ON ml.user_id = u.id
+            WHERE ml.channel_id = ? 
+            ORDER BY ml.timestamp ASC
         `, [ticket.channel_id], (err, messages) => {
             if (err) {
                 console.error('Messages error:', err);
                 messages = [];
             }
             
-            // Erstelle vollständige Export-Daten
+            // Berechne Statistiken
+            const messagesByUser = {};
+            const attachmentCount = messages.filter(m => m.attachments && m.attachments.trim() !== '').length;
+            const participantCount = new Set(messages.map(m => m.username)).size;
+            
+            messages.forEach(msg => {
+                if (messagesByUser[msg.username]) {
+                    messagesByUser[msg.username]++;
+                } else {
+                    messagesByUser[msg.username] = 1;
+                }
+            });
+            
+            // Berechne Dauer
+            const duration = ticket.closed_at ? 
+                Math.round((new Date(ticket.closed_at) - new Date(ticket.created_at)) / (1000 * 60)) : 
+                Math.round((new Date() - new Date(ticket.created_at)) / (1000 * 60));
+            
+            // Erstelle Export-Daten
             const exportData = {
                 ticket_info: {
                     ticket_id: ticket.ticket_id,
@@ -392,31 +470,36 @@ router.get('/tickets/:ticketId/export', requireAuth(), (req, res) => {
                     channel_id: ticket.channel_id,
                     status: ticket.status,
                     created_at: ticket.created_at,
-                    closed_at: ticket.closed_at
+                    closed_at: ticket.closed_at,
+                    user_avatar: ticket.avatar_hash,
+                    user_discriminator: ticket.discriminator
                 },
                 statistics: {
                     total_messages: messages.length,
-                    messages_by_user: {},
-                    duration_minutes: ticket.closed_at ? 
-                        Math.round((new Date(ticket.closed_at) - new Date(ticket.created_at)) / (1000 * 60)) : 
-                        Math.round((new Date() - new Date(ticket.created_at)) / (1000 * 60))
+                    participant_count: participantCount,
+                    attachment_count: attachmentCount,
+                    duration_minutes: duration,
+                    messages_by_user: messagesByUser
                 },
-                messages: messages,
+                messages: messages.map(msg => ({
+                    id: msg.id,
+                    message_id: msg.message_id,
+                    user_id: msg.user_id,
+                    username: msg.username,
+                    content: msg.content,
+                    timestamp: msg.timestamp,
+                    attachments: msg.attachments,
+                    edited: !!msg.edited,
+                    deleted: !!msg.deleted,
+                    avatar_hash: msg.avatar_hash,
+                    discriminator: msg.discriminator
+                })),
                 export_info: {
                     exported_by: req.session.user.username,
                     exported_at: new Date().toISOString(),
                     system_version: '14th Squad Management v1.1'
                 }
             };
-            
-            // Berechne Nachrichten-Statistiken
-            messages.forEach(msg => {
-                if (exportData.statistics.messages_by_user[msg.username]) {
-                    exportData.statistics.messages_by_user[msg.username]++;
-                } else {
-                    exportData.statistics.messages_by_user[msg.username] = 1;
-                }
-            });
             
             res.setHeader('Content-Type', 'application/json');
             res.setHeader('Content-Disposition', `attachment; filename="ticket_${ticketId}_data_${Date.now()}.json"`);
@@ -430,6 +513,99 @@ router.get('/tickets/:ticketId/export', requireAuth(), (req, res) => {
 // ========================================
 // BENUTZER MANAGEMENT API
 // ========================================
+
+router.get('/discord/users/:userId', requireAuth(), (req, res) => {
+    const userId = req.params.userId;
+    
+    // Hole User-Daten aus der Datenbank
+    db.get(`SELECT * FROM users WHERE id = ?`, [userId], (err, user) => {
+        if (err) {
+            return res.status(500).json({ error: 'Datenbankfehler' });
+        }
+        
+        if (user) {
+            res.json({
+                success: true,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    avatar: user.avatar_hash || null, // Braucht neue Spalte
+                    discriminator: user.discriminator || null, // Braucht neue Spalte
+                    verified: user.verified
+                }
+            });
+        } else {
+            res.status(404).json({ 
+                success: false, 
+                error: 'User not found' 
+            });
+        }
+    });
+});
+
+// Fehlende API-Endpunkte für api.js
+
+// 1. Discord User API für Avatar-Laden
+router.get('/discord/users/:userId', requireAuth(), (req, res) => {
+    const userId = req.params.userId;
+    
+    // Hole User-Daten aus der Datenbank
+    db.get(`SELECT * FROM users WHERE id = ?`, [userId], (err, user) => {
+        if (err) {
+            return res.status(500).json({ error: 'Datenbankfehler' });
+        }
+        
+        if (user) {
+            res.json({
+                success: true,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    avatar: user.avatar_hash || null, // Braucht neue Spalte
+                    discriminator: user.discriminator || null, // Braucht neue Spalte
+                    verified: user.verified
+                }
+            });
+        } else {
+            res.status(404).json({ 
+                success: false, 
+                error: 'User not found' 
+            });
+        }
+    });
+});
+
+// 2. Batch User API für effizientes Avatar-Laden
+router.post('/discord/users/batch', requireAuth(), (req, res) => {
+    const { userIds } = req.body;
+    
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+        return res.status(400).json({ error: 'Ungültige User IDs' });
+    }
+    
+    // Begrenze auf max 50 User pro Anfrage
+    const limitedUserIds = userIds.slice(0, 50);
+    const placeholders = limitedUserIds.map(() => '?').join(',');
+    
+    db.all(`SELECT * FROM users WHERE id IN (${placeholders})`, limitedUserIds, (err, users) => {
+        if (err) {
+            return res.status(500).json({ error: 'Datenbankfehler' });
+        }
+        
+        const userData = users.map(user => ({
+            id: user.id,
+            username: user.username,
+            avatar: user.avatar_hash || null,
+            discriminator: user.discriminator || null,
+            verified: user.verified
+        }));
+        
+        res.json({
+            success: true,
+            users: userData
+        });
+    });
+});
 
 // Alle Discord-Benutzer laden
 router.get('/users/discord', requireAuth(), (req, res) => {
@@ -842,6 +1018,100 @@ router.get('/users/search', requireAuth(), (req, res) => {
     });
 });
 
+// Sessions für einen Web-Benutzer abrufen
+router.get('/users/web/:userId/sessions', requireAuth('admin'), (req, res) => {
+    const userId = req.params.userId;
+    
+    // Hole aktuelle Session ID
+    const currentSessionId = req.sessionID;
+    
+    db.all(`
+        SELECT 
+            session_id,
+            user_id,
+            device_type,
+            created_at,
+            last_activity,
+            CASE WHEN session_id = ? THEN 1 ELSE 0 END as current
+        FROM user_sessions 
+        WHERE user_id = ? AND expires_at > datetime('now')
+        ORDER BY last_activity DESC
+    `, [currentSessionId, userId], (err, sessions) => {
+        if (err) {
+            console.error('Sessions query error:', err);
+            return res.status(500).json({ error: 'Fehler beim Laden der Sessions' });
+        }
+        
+        logWebAction(req.session.user.id, 'VIEW_USER_SESSIONS', `Sessions für Benutzer ${userId} angezeigt`);
+        
+        res.json({ 
+            success: true,
+            sessions: sessions || []
+        });
+    });
+});
+
+// Einzelne Session beenden
+router.post('/users/web/:userId/sessions/:sessionId/terminate', requireAuth('admin'), (req, res) => {
+    const userId = req.params.userId;
+    const sessionId = req.params.sessionId;
+    const currentSessionId = req.sessionID;
+    
+    // Verhindere dass die aktuelle Session beendet wird
+    if (sessionId === currentSessionId) {
+        return res.status(400).json({ error: 'Die aktuelle Session kann nicht beendet werden' });
+    }
+    
+    db.run(`
+        UPDATE user_sessions 
+        SET expires_at = datetime('now') 
+        WHERE session_id = ? AND user_id = ?
+    `, [sessionId, userId], function(err) {
+        if (err) {
+            console.error('Terminate session error:', err);
+            return res.status(500).json({ error: 'Fehler beim Beenden der Session' });
+        }
+        
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Session nicht gefunden' });
+        }
+        
+        logWebAction(req.session.user.id, 'TERMINATE_USER_SESSION', 
+            `Session ${sessionId} für Benutzer ${userId} beendet`);
+        
+        res.json({ 
+            success: true, 
+            message: 'Session erfolgreich beendet'
+        });
+    });
+});
+
+// Alle anderen Sessions beenden
+router.post('/users/web/:userId/sessions/terminate-others', requireAuth('admin'), (req, res) => {
+    const userId = req.params.userId;
+    const currentSessionId = req.sessionID;
+    
+    db.run(`
+        UPDATE user_sessions 
+        SET expires_at = datetime('now') 
+        WHERE user_id = ? AND session_id != ? AND expires_at > datetime('now')
+    `, [userId, currentSessionId], function(err) {
+        if (err) {
+            console.error('Terminate other sessions error:', err);
+            return res.status(500).json({ error: 'Fehler beim Beenden der Sessions' });
+        }
+        
+        logWebAction(req.session.user.id, 'TERMINATE_OTHER_USER_SESSIONS', 
+            `${this.changes} Sessions für Benutzer ${userId} beendet`);
+        
+        res.json({ 
+            success: true, 
+            message: `${this.changes} Sessions beendet`,
+            terminated_count: this.changes
+        });
+    });
+});
+
 // ========================================
 // NACHRICHTEN API
 // ========================================
@@ -893,15 +1163,27 @@ router.get('/bot/status', requireAuth(), (req, res) => {
         // Bot gilt als online wenn letzte Aktivität < 60 Sekunden
         const botOnline = timeSinceLastActivity !== null && timeSinceLastActivity < 60;
         
-        res.json({
-            online: botOnline,
-            last_activity: lastActivity,
-            seconds_since_activity: timeSinceLastActivity,
-            last_command: lastCommand ? {
-                type: lastCommand.command_type,
-                status: lastCommand.status,
-                result: lastCommand.result
-            } : null
+        // Prüfe auch Nachrichten-Aktivität
+        db.get(`
+            SELECT timestamp FROM message_logs 
+            ORDER BY timestamp DESC 
+            LIMIT 1
+        `, (err, lastMessage) => {
+            const lastMessageTime = lastMessage ? new Date(lastMessage.timestamp) : null;
+            const messageTimeDiff = lastMessageTime ? (now - lastMessageTime) / 1000 : null;
+            
+            res.json({
+                online: botOnline,
+                last_activity: lastActivity,
+                seconds_since_activity: timeSinceLastActivity,
+                last_message_time: lastMessageTime,
+                seconds_since_message: messageTimeDiff,
+                last_command: lastCommand ? {
+                    type: lastCommand.command_type,
+                    status: lastCommand.status,
+                    result: lastCommand.result
+                } : null
+            });
         });
     });
 });

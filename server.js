@@ -28,6 +28,48 @@ app.use(session({
     cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 Stunden
 }));
 
+app.use((req, res, next) => {
+    if (req.session && req.session.user) {
+        const userId = req.session.user.id;
+        const sessionId = req.sessionID;
+        const userAgent = req.headers['user-agent'] || 'Unknown';
+        
+        // Bestimme Device-Typ basierend auf User-Agent
+        let deviceType = 'Desktop';
+        if (/Mobile|Android|iPhone|iPad/.test(userAgent)) {
+            if (/iPad/.test(userAgent)) {
+                deviceType = 'Tablet';
+            } else {
+                deviceType = 'Mobile';
+            }
+        }
+        
+        const expiresAt = new Date(Date.now() + (24 * 60 * 60 * 1000)); // 24 Stunden
+        
+        // Upsert Session
+        db.run(`
+            INSERT OR REPLACE INTO user_sessions 
+            (session_id, user_id, device_type, last_activity, expires_at) 
+            VALUES (?, ?, ?, datetime('now'), ?)
+        `, [sessionId, userId, deviceType, expiresAt.toISOString()], (err) => {
+            if (err) {
+                console.error('Session tracking error:', err);
+            }
+        });
+        
+        // Cleanup abgelaufene Sessions (alle 100 Requests)
+        if (Math.random() < 0.01) {
+            db.run(`DELETE FROM user_sessions WHERE expires_at < datetime('now')`, (err) => {
+                if (err) {
+                    console.error('Session cleanup error:', err);
+                }
+            });
+        }
+    }
+    
+    next();
+});
+
 // Middleware für Authentication
 const requireAuth = (requiredRole = 'mod') => {
     return (req, res, next) => {
@@ -409,20 +451,25 @@ app.get('/messages', requireAuth(), (req, res) => {
     const limit = 50;
     const offset = (page - 1) * limit;
     
-    let query = `SELECT * FROM message_logs WHERE 1=1`;
+    let query = `
+        SELECT ml.*, u.username as real_username, u.avatar_hash, u.discriminator
+        FROM message_logs ml
+        LEFT JOIN users u ON ml.user_id = u.id
+        WHERE 1=1
+    `;
     let params = [];
     
     if (search) {
-        query += ` AND (content LIKE ? OR username LIKE ? OR channel_name LIKE ?)`;
+        query += ` AND (ml.content LIKE ? OR ml.username LIKE ? OR ml.channel_name LIKE ?)`;
         params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
     
     if (channel) {
-        query += ` AND channel_name = ?`;
+        query += ` AND ml.channel_name = ?`;
         params.push(channel);
     }
     
-    query += ` ORDER BY timestamp DESC LIMIT ? OFFSET ?`;
+    query += ` ORDER BY ml.timestamp DESC LIMIT ? OFFSET ?`;
     params.push(limit, offset);
     
     db.all(query, params, (err, messages) => {
@@ -430,6 +477,14 @@ app.get('/messages', requireAuth(), (req, res) => {
             console.error('Messages query error:', err);
             messages = [];
         }
+        
+        // Ergänze fehlende Avatar-Daten
+        const enhancedMessages = messages.map(msg => ({
+            ...msg,
+            username: msg.real_username || msg.username || 'Unbekannt',
+            avatar_hash: msg.avatar_hash || null,
+            discriminator: msg.discriminator || null
+        }));
         
         // Get total count for pagination
         let countQuery = `SELECT COUNT(*) as count FROM message_logs WHERE 1=1`;
@@ -458,7 +513,7 @@ app.get('/messages', requireAuth(), (req, res) => {
             
             res.render('messages', { 
                 user: req.session.user,
-                messages: messages || [],
+                messages: enhancedMessages || [],
                 search,
                 channel,
                 currentPage: page,
@@ -498,7 +553,12 @@ app.get('/tickets', requireAuth(), (req, res) => {
 app.get('/tickets/:ticketId', requireAuth(), (req, res) => {
     const ticketId = req.params.ticketId;
     
-    db.get(`SELECT * FROM tickets WHERE ticket_id = ?`, [ticketId], (err, ticket) => {
+    db.get(`
+        SELECT t.*, u.username, u.avatar_hash, u.discriminator 
+        FROM tickets t 
+        LEFT JOIN users u ON t.user_id = u.id 
+        WHERE t.ticket_id = ?
+    `, [ticketId], (err, ticket) => {
         if (err || !ticket) {
             return res.status(404).render('error', { 
                 error: 'Ticket nicht gefunden',
@@ -506,23 +566,53 @@ app.get('/tickets/:ticketId', requireAuth(), (req, res) => {
             });
         }
         
-        // Lade Nachrichten aus diesem Ticket-Channel
+        // Lade Nachrichten mit User-Informationen
         db.all(`
-            SELECT * FROM message_logs 
-            WHERE channel_id = ? 
-            ORDER BY timestamp ASC
+            SELECT ml.*, u.username as real_username, u.avatar_hash, u.discriminator
+            FROM message_logs ml
+            LEFT JOIN users u ON ml.user_id = u.id
+            WHERE ml.channel_id = ? 
+            ORDER BY ml.timestamp ASC
         `, [ticket.channel_id], (err, messages) => {
             if (err) {
                 console.error('Ticket messages error:', err);
                 messages = [];
             }
             
+            // Falls keine Nachrichten in message_logs, versuche transcript
+            if (messages.length === 0 && ticket.transcript) {
+                try {
+                    const transcriptMessages = JSON.parse(ticket.transcript);
+                    messages = transcriptMessages.map(msg => ({
+                        ...msg,
+                        username: msg.username || 'Unbekannt',
+                        avatar_hash: null,
+                        discriminator: null,
+                        real_username: msg.username
+                    }));
+                } catch (parseError) {
+                    console.error('Transcript parse error:', parseError);
+                    messages = [];
+                }
+            }
+            
+            // Ergänze fehlende Avatar-Daten und Username
+            const enhancedMessages = messages.map(msg => ({
+                ...msg,
+                username: msg.real_username || msg.username || 'Unbekannt',
+                avatar_hash: msg.avatar_hash || null,
+                discriminator: msg.discriminator || null
+            }));
+            
             logWebAction(req.session.user.id, 'VIEW_TICKET', `Ticket ${ticketId} angezeigt`);
             
             res.render('ticket_detail', { 
                 user: req.session.user,
-                ticket,
-                messages: messages || [],
+                ticket: {
+                    ...ticket,
+                    username: ticket.username || 'Unbekannter Benutzer'
+                },
+                messages: enhancedMessages || [],
                 title: `Ticket ${ticketId} - 14th Squad Management`
             });
         });
@@ -531,7 +621,7 @@ app.get('/tickets/:ticketId', requireAuth(), (req, res) => {
 
 // User Management (nur Admin)
 app.get('/users', requireAuth('admin'), (req, res) => {
-    // Lade Discord-Benutzer
+    // Lade Discord-Benutzer mit Avatar-Daten
     db.all(`
         SELECT 
             u.*,
@@ -562,6 +652,173 @@ app.get('/users', requireAuth('admin'), (req, res) => {
                 title: 'Benutzerverwaltung - 14th Squad Management'
             });
         });
+    });
+});
+
+app.post('/admin/sync-avatars', requireAuth('admin'), async (req, res) => {
+    try {
+        // Importiere Bot-Funktionen (falls verfügbar)
+        const { syncAllAvatarsCommand } = require('./bot.js');
+        
+        if (syncAllAvatarsCommand) {
+            await syncAllAvatarsCommand();
+            
+            logWebAction(req.session.user.id, 'SYNC_AVATARS', 'Avatar-Synchronisation manuell gestartet');
+            
+            res.json({ 
+                success: true, 
+                message: 'Avatar-Synchronisation gestartet' 
+            });
+        } else {
+            res.status(503).json({ 
+                error: 'Bot-Verbindung nicht verfügbar' 
+            });
+        }
+    } catch (error) {
+        console.error('Avatar sync error:', error);
+        res.status(500).json({ 
+            error: 'Fehler bei der Avatar-Synchronisation' 
+        });
+    }
+});
+
+app.post('/admin/update-database', requireAuth('admin'), (req, res) => {
+    const updates = [
+        'ALTER TABLE users ADD COLUMN avatar_hash TEXT',
+        'ALTER TABLE users ADD COLUMN discriminator TEXT', 
+        'ALTER TABLE users ADD COLUMN last_seen DATETIME',
+        'ALTER TABLE message_logs ADD COLUMN user_avatar_hash TEXT',
+        'ALTER TABLE message_logs ADD COLUMN user_discriminator TEXT',
+        'CREATE INDEX IF NOT EXISTS idx_users_avatar ON users(id, avatar_hash)',
+        'CREATE INDEX IF NOT EXISTS idx_message_logs_channel_time ON message_logs(channel_id, timestamp)',
+        'CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status, created_at)'
+    ];
+    
+    let completedUpdates = 0;
+    let errors = [];
+    
+    updates.forEach((sql, index) => {
+        db.run(sql, (err) => {
+            completedUpdates++;
+            
+            if (err && !err.message.includes('duplicate column name')) {
+                errors.push(`Update ${index + 1}: ${err.message}`);
+            }
+            
+            if (completedUpdates === updates.length) {
+                if (errors.length === 0) {
+                    logWebAction(req.session.user.id, 'UPDATE_DATABASE', 'Datenbankschema für Avatare aktualisiert');
+                    res.json({ 
+                        success: true, 
+                        message: 'Datenbankschema erfolgreich aktualisiert',
+                        updatesApplied: updates.length
+                    });
+                } else {
+                    res.status(500).json({ 
+                        error: 'Einige Updates fehlgeschlagen',
+                        errors: errors,
+                        successfulUpdates: updates.length - errors.length
+                    });
+                }
+            }
+        });
+    });
+});
+
+app.get('/admin/avatar-stats', requireAuth('admin'), (req, res) => {
+    db.all(`
+        SELECT 
+            COUNT(*) as total_users,
+            COUNT(CASE WHEN avatar_hash IS NOT NULL AND avatar_hash != '' THEN 1 END) as users_with_avatars,
+            COUNT(CASE WHEN avatar_hash IS NULL OR avatar_hash = '' THEN 1 END) as users_without_avatars,
+            COUNT(CASE WHEN last_seen > datetime('now', '-7 days') THEN 1 END) as active_last_week,
+            COUNT(CASE WHEN verified = 1 THEN 1 END) as verified_users
+        FROM users
+    `, (err, stats) => {
+        if (err) {
+            return res.status(500).json({ error: 'Datenbankfehler' });
+        }
+        
+        res.json({
+            success: true,
+            stats: stats[0] || {
+                total_users: 0,
+                users_with_avatars: 0,
+                users_without_avatars: 0,
+                active_last_week: 0,
+                verified_users: 0
+            }
+        });
+    });
+});
+
+app.get('/admin/debug/users', requireAuth('admin'), (req, res) => {
+    const limit = parseInt(req.query.limit) || 10;
+    
+    db.all(`
+        SELECT id, username, avatar_hash, discriminator, verified, last_seen
+        FROM users 
+        ORDER BY last_seen DESC 
+        LIMIT ?
+    `, [limit], (err, users) => {
+        if (err) {
+            return res.status(500).json({ error: 'Datenbankfehler' });
+        }
+        
+        res.json({
+            success: true,
+            users: users || [],
+            total_shown: users ? users.length : 0
+        });
+    });
+});
+
+app.get('/admin/system-status', requireAuth('admin'), (req, res) => {
+    db.all(`
+        SELECT 
+            (SELECT COUNT(*) FROM message_logs) as total_messages,
+            (SELECT COUNT(*) FROM tickets) as total_tickets,
+            (SELECT COUNT(*) FROM users) as total_discord_users,
+            (SELECT COUNT(*) FROM users WHERE avatar_hash IS NOT NULL) as users_with_avatars,
+            (SELECT COUNT(*) FROM web_users) as total_web_users,
+            (SELECT COUNT(*) FROM temp_channels) as active_temp_channels,
+            (SELECT COUNT(*) FROM web_logs) as total_web_logs,
+            (SELECT COUNT(*) FROM bot_commands WHERE status = 'pending') as pending_commands,
+            (SELECT MAX(timestamp) FROM message_logs) as last_message_time
+    `, (err, stats) => {
+        if (err) {
+            return res.status(500).json({ error: 'Fehler beim Laden der System-Statistiken' });
+        }
+        
+        const systemInfo = {
+            stats: stats[0] || {},
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString(),
+            version: '1.1.0',
+            environment: process.env.NODE_ENV || 'development',
+            avatar_support: true,
+            database_version: '1.1.0'
+        };
+        
+        res.json(systemInfo);
+    });
+});
+
+app.get('/admin/test-avatar/:userId', requireAuth('admin'), (req, res) => {
+    const userId = req.params.userId;
+    
+    // Teste verschiedene Avatar-URLs
+    const testUrls = {
+        default_old: `https://cdn.discordapp.com/embed/avatars/${parseInt(userId) % 5}.png`,
+        default_new: `https://cdn.discordapp.com/embed/avatars/${Number((BigInt(userId) >> 22n) % 6n)}.png`,
+        custom_example: `https://cdn.discordapp.com/avatars/${userId}/example_hash.png`
+    };
+    
+    res.json({
+        success: true,
+        userId: userId,
+        testUrls: testUrls,
+        recommendation: testUrls.default_new
     });
 });
 
@@ -600,6 +857,33 @@ app.get('/logs', requireAuth('admin'), (req, res) => {
                 hasPrev: page > 1,
                 title: 'Web Logs - 14th Squad Management'
             });
+        });
+    });
+});
+
+app.get('/health', (req, res) => {
+    db.get(`SELECT COUNT(*) as user_count FROM users`, (err, result) => {
+        if (err) {
+            return res.status(500).json({ 
+                status: 'error', 
+                message: 'Database connection failed',
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        res.json({
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            database: 'connected',
+            user_count: result.user_count,
+            version: '1.1.0',
+            features: {
+                avatars: true,
+                tickets: true,
+                messages: true,
+                web_interface: true
+            }
         });
     });
 });

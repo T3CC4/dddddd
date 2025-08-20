@@ -1,6 +1,6 @@
 /* ========================================
    14TH SQUAD - USERS.JS
-   User Management JavaScript mit Placeholder-Implementierungen
+   User Management JavaScript - Vollständig implementiert
    ======================================== */
 
 let currentUserId = null;
@@ -9,47 +9,35 @@ let currentModerationAction = null;
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadAllUserStats();
-    initializeFeatureFlags();
     
     // Auto-refresh stats every 30 seconds
     setInterval(loadAllUserStats, 30000);
+    
+    // Initialize event listeners
+    setupEventListeners();
 });
 
-// Feature Flags für nicht implementierte Features
-const FEATURES = {
-    DISCORD_MODERATION: false,      // Discord Bot API Integration
-    WEB_USER_LOGS: false,          // Advanced Logging
-    SESSION_MANAGEMENT: false,      // Session Tracking
-    ROLE_MANAGEMENT: false,        // Advanced Role Changes
-    VERIFICATION_RESET: false      // Discord Verification Reset
-};
-
-// Initialize Feature Flags
-function initializeFeatureFlags() {
-    // Disable buttons for unimplemented features
-    if (!FEATURES.DISCORD_MODERATION) {
-        document.querySelectorAll('[onclick*="moderateUser"]').forEach(btn => {
-            btn.disabled = true;
-            btn.title = 'Discord Moderation - Coming Soon';
-            btn.style.opacity = '0.5';
-        });
+// Setup Event Listeners
+function setupEventListeners() {
+    // Real-time search for Discord users
+    const discordSearch = document.getElementById('discordSearch');
+    if (discordSearch) {
+        discordSearch.addEventListener('input', filterDiscordUsers);
     }
     
-    if (!FEATURES.WEB_USER_LOGS) {
-        document.querySelectorAll('[onclick*="showWebUserLogs"]').forEach(btn => {
-            btn.disabled = true;
-            btn.title = 'Web User Logs - Coming Soon';
-            btn.style.opacity = '0.5';
-        });
+    // Filter change listeners
+    const discordFilter = document.getElementById('discordFilter');
+    if (discordFilter) {
+        discordFilter.addEventListener('change', filterDiscordUsers);
     }
     
-    if (!FEATURES.SESSION_MANAGEMENT) {
-        document.querySelectorAll('[onclick*="showWebUserSessions"]').forEach(btn => {
-            btn.disabled = true;
-            btn.title = 'Session Management - Coming Soon';
-            btn.style.opacity = '0.5';
-        });
+    const webUserFilter = document.getElementById('webUserFilter');
+    if (webUserFilter) {
+        webUserFilter.addEventListener('change', filterWebUsers);
     }
+    
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', handleKeyboardShortcuts);
 }
 
 // ================================
@@ -60,8 +48,11 @@ function loadAllUserStats() {
     const discordUsers = document.querySelectorAll('.discord-user-row');
     
     discordUsers.forEach(row => {
-        const userId = row.querySelector('code').textContent;
-        loadUserStats(userId);
+        const userIdElement = row.querySelector('code');
+        if (userIdElement) {
+            const userId = userIdElement.textContent;
+            loadUserStats(userId);
+        }
     });
 }
 
@@ -80,13 +71,13 @@ function loadUserStats(userId) {
             const stats = data.stats;
             statsContainer.innerHTML = `
                 <div class="stat-item" title="Nachrichten">
-                    <i class="fas fa-comment"></i> ${stats.message_count}
+                    <i class="fas fa-comment"></i> ${stats.message_count || 0}
                 </div>
                 <div class="stat-item" title="Tickets">
-                    <i class="fas fa-ticket-alt"></i> ${stats.ticket_count}
+                    <i class="fas fa-ticket-alt"></i> ${stats.ticket_count || 0}
                 </div>
                 <div class="stat-item" title="Voice Channels">
-                    <i class="fas fa-microphone"></i> ${stats.voice_channel_count}
+                    <i class="fas fa-microphone"></i> ${stats.voice_channel_count || 0}
                 </div>
             `;
         })
@@ -101,14 +92,18 @@ function loadUserStats(userId) {
 // ================================
 
 function filterDiscordUsers() {
-    const searchTerm = document.getElementById('discordSearch').value.toLowerCase();
-    const statusFilter = document.getElementById('discordFilter').value;
+    const searchInput = document.getElementById('discordSearch');
+    const filterSelect = document.getElementById('discordFilter');
+    
+    const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+    const statusFilter = filterSelect ? filterSelect.value : '';
+    
     const rows = document.querySelectorAll('.discord-user-row');
     let visibleCount = 0;
     
     rows.forEach(row => {
-        const searchData = row.getAttribute('data-search');
-        const status = row.getAttribute('data-status');
+        const searchData = row.getAttribute('data-search') || '';
+        const status = row.getAttribute('data-status') || '';
         
         const searchMatch = !searchTerm || searchData.includes(searchTerm);
         const statusMatch = !statusFilter || status === statusFilter;
@@ -124,17 +119,23 @@ function filterDiscordUsers() {
     // Update tab count
     const tab = document.getElementById('discord-users-tab');
     if (tab) {
-        tab.innerHTML = `<i class="fab fa-discord"></i> Discord Benutzer (${visibleCount})`;
+        const originalText = tab.innerHTML;
+        const match = originalText.match(/^(.*)\(\d+\)(.*)$/);
+        if (match) {
+            tab.innerHTML = `${match[1]}(${visibleCount})${match[2] || ''}`;
+        }
     }
 }
 
 function filterWebUsers() {
-    const roleFilter = document.getElementById('webUserFilter').value;
+    const filterSelect = document.getElementById('webUserFilter');
+    const roleFilter = filterSelect ? filterSelect.value : '';
+    
     const rows = document.querySelectorAll('.web-user-row');
     let visibleCount = 0;
     
     rows.forEach(row => {
-        const role = row.getAttribute('data-role');
+        const role = row.getAttribute('data-role') || '';
         
         if (!roleFilter || role === roleFilter) {
             row.style.display = '';
@@ -147,12 +148,16 @@ function filterWebUsers() {
     // Update tab count
     const tab = document.getElementById('web-users-tab');
     if (tab) {
-        tab.innerHTML = `<i class="fas fa-globe"></i> Web Benutzer (${visibleCount})`;
+        const originalText = tab.innerHTML;
+        const match = originalText.match(/^(.*)\(\d+\)(.*)$/);
+        if (match) {
+            tab.innerHTML = `${match[1]}(${visibleCount})${match[2] || ''}`;
+        }
     }
 }
 
 // ================================
-// WEB USER MANAGEMENT (IMPLEMENTED)
+// WEB USER MANAGEMENT
 // ================================
 
 function showCreateWebUserModal() {
@@ -167,25 +172,34 @@ function showCreateWebUserModal() {
 }
 
 function createWebUser() {
-    const username = document.getElementById('newUsername').value;
+    const username = document.getElementById('newUsername').value.trim();
     const password = document.getElementById('newPassword').value;
     const role = document.getElementById('newRole').value;
     const resultDiv = document.getElementById('createUserResult');
     
+    // Validation
     if (!username || !password || !role) {
-        resultDiv.innerHTML = '<div class="alert alert-danger">Alle Felder sind erforderlich!</div>';
+        resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Alle Felder sind erforderlich!</div>';
         return;
     }
     
     if (username.length < 3) {
-        resultDiv.innerHTML = '<div class="alert alert-danger">Benutzername muss mindestens 3 Zeichen lang sein!</div>';
+        resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Benutzername muss mindestens 3 Zeichen lang sein!</div>';
         return;
     }
     
     if (password.length < 6) {
-        resultDiv.innerHTML = '<div class="alert alert-danger">Passwort muss mindestens 6 Zeichen lang sein!</div>';
+        resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Passwort muss mindestens 6 Zeichen lang sein!</div>';
         return;
     }
+    
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+        resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Benutzername darf nur Buchstaben, Zahlen und Unterstriche enthalten!</div>';
+        return;
+    }
+    
+    // Show loading
+    resultDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Erstelle Benutzer...</div>';
     
     fetch('/users/web/create', {
         method: 'POST',
@@ -197,7 +211,7 @@ function createWebUser() {
         if (data.success) {
             resultDiv.innerHTML = `
                 <div class="alert alert-success">
-                    <strong><i class="fas fa-check"></i> Benutzer erfolgreich erstellt!</strong><br>
+                    <strong><i class="fas fa-check-circle"></i> Benutzer erfolgreich erstellt!</strong><br>
                     <div class="mt-2 p-2" style="background: rgba(255, 0, 102, 0.1); border-radius: 8px;">
                         <strong>Login-Daten:</strong><br>
                         Benutzername: <code>${username}</code><br>
@@ -209,14 +223,18 @@ function createWebUser() {
                     </div>
                 </div>
             `;
-            setTimeout(() => location.reload(), 3000);
+            
+            // Auto reload after 3 seconds
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
         } else {
-            resultDiv.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times"></i> ${data.error}</div>`;
+            resultDiv.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times-circle"></i> ${data.error}</div>`;
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        resultDiv.innerHTML = '<div class="alert alert-danger">Fehler beim Erstellen des Benutzers</div>';
+        console.error('Error creating user:', error);
+        resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-times-circle"></i> Fehler beim Erstellen des Benutzers</div>';
     });
 }
 
@@ -237,20 +255,24 @@ function confirmPasswordReset() {
     const confirm = document.getElementById('confirmPassword').value;
     const resultDiv = document.getElementById('passwordResetResult');
     
+    // Validation
     if (!password || !confirm) {
-        resultDiv.innerHTML = '<div class="alert alert-danger">Beide Felder sind erforderlich!</div>';
+        resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Beide Felder sind erforderlich!</div>';
         return;
     }
     
     if (password !== confirm) {
-        resultDiv.innerHTML = '<div class="alert alert-danger">Passwörter stimmen nicht überein!</div>';
+        resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Passwörter stimmen nicht überein!</div>';
         return;
     }
     
     if (password.length < 6) {
-        resultDiv.innerHTML = '<div class="alert alert-danger">Passwort muss mindestens 6 Zeichen lang sein!</div>';
+        resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Passwort muss mindestens 6 Zeichen lang sein!</div>';
         return;
     }
+    
+    // Show loading
+    resultDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Passwort wird zurückgesetzt...</div>';
     
     fetch(`/api/users/web/${currentUserId}/reset-password`, {
         method: 'POST',
@@ -260,66 +282,100 @@ function confirmPasswordReset() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            resultDiv.innerHTML = '<div class="alert alert-success">Passwort erfolgreich zurückgesetzt!</div>';
+            resultDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check-circle"></i> Passwort erfolgreich zurückgesetzt!</div>';
             setTimeout(() => {
-                bootstrap.Modal.getInstance(document.getElementById('passwordResetModal')).hide();
+                const modal = bootstrap.Modal.getInstance(document.getElementById('passwordResetModal'));
+                if (modal) modal.hide();
             }, 2000);
         } else {
-            resultDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            resultDiv.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times-circle"></i> ${data.error}</div>`;
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        resultDiv.innerHTML = '<div class="alert alert-danger">Fehler beim Zurücksetzen des Passworts</div>';
+        console.error('Error resetting password:', error);
+        resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-times-circle"></i> Fehler beim Zurücksetzen des Passworts</div>';
     });
 }
 
 function regenerateUniquePassword(userId) {
-    if (confirm('Möchtest du das Unique Password neu generieren?')) {
-        fetch(`/api/users/web/${userId}/regenerate-unique`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showToast(`Neues Unique Password: ${data.uniquePassword}`, 'success');
-                setTimeout(() => location.reload(), 2000);
-            } else {
-                showToast(data.error || 'Fehler beim Regenerieren', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Fehler beim Regenerieren', 'error');
-        });
+    if (!confirm('Möchtest du das Unique Password neu generieren? Das alte wird ungültig!')) {
+        return;
     }
+    
+    fetch(`/api/users/web/${userId}/regenerate-unique`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show new password in modal
+            const alertContent = `
+                <div class="alert alert-success" role="alert">
+                    <h4 class="alert-heading"><i class="fas fa-check-circle"></i> Unique Password regeneriert!</h4>
+                    <p>Das neue Unique Password lautet:</p>
+                    <hr>
+                    <h3 class="text-center">
+                        <code style="font-size: 1.5em; background: rgba(255, 0, 102, 0.1); padding: 10px; border-radius: 8px;">
+                            ${data.uniquePassword}
+                        </code>
+                    </h3>
+                    <hr>
+                    <p class="mb-0">
+                        <i class="fas fa-exclamation-triangle text-warning"></i>
+                        <strong>Wichtig:</strong> Teile dieses Password sicher mit dem Benutzer!
+                    </p>
+                </div>
+            `;
+            
+            showModal('Unique Password regeneriert', alertContent, [
+                {
+                    text: 'Kopieren',
+                    class: 'btn-primary',
+                    action: () => copyToClipboard(data.uniquePassword)
+                },
+                {
+                    text: 'Schließen',
+                    class: 'btn-secondary',
+                    action: () => setTimeout(() => window.location.reload(), 1000)
+                }
+            ]);
+        } else {
+            showToast(data.error || 'Fehler beim Regenerieren', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error regenerating unique password:', error);
+        showToast('Fehler beim Regenerieren', 'error');
+    });
 }
 
 function deleteWebUser(userId) {
-    if (confirm('Bist du sicher, dass du diesen Benutzer löschen möchtest?')) {
-        fetch(`/api/users/web/${userId}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showToast('Benutzer erfolgreich gelöscht!', 'success');
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                showToast(data.error || 'Fehler beim Löschen', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Fehler beim Löschen', 'error');
-        });
+    if (!confirm('Bist du sicher, dass du diesen Benutzer löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden!')) {
+        return;
     }
+    
+    fetch(`/api/users/web/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Benutzer erfolgreich gelöscht!', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showToast(data.error || 'Fehler beim Löschen', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting user:', error);
+        showToast('Fehler beim Löschen', 'error');
+    });
 }
 
 // ================================
-// DISCORD USER MANAGEMENT (IMPLEMENTED)
+// DISCORD USER MANAGEMENT
 // ================================
 
 function showUserDetails(userId) {
@@ -327,8 +383,8 @@ function showUserDetails(userId) {
     
     contentDiv.innerHTML = `
         <div class="text-center">
-            <i class="fas fa-spinner fa-spin fa-2x"></i>
-            <p>Lade Benutzer-Details...</p>
+            <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+            <p class="mt-2">Lade Benutzer-Details...</p>
         </div>
     `;
     
@@ -339,7 +395,7 @@ function showUserDetails(userId) {
         .then(response => response.json())
         .then(data => {
             if (data.error) {
-                contentDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                contentDiv.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> ${data.error}</div>`;
                 return;
             }
             
@@ -354,39 +410,40 @@ function showUserDetails(userId) {
                              alt="${user.username}" class="user-avatar mb-2" style="width: 80px; height: 80px;">
                         <h5>${user.username}</h5>
                         <span class="badge bg-${user.verified ? 'success' : 'warning'}">
+                            <i class="fas fa-${user.verified ? 'check-circle' : 'clock'}"></i>
                             ${user.verified ? 'Verifiziert' : 'Ausstehend'}
                         </span>
                     </div>
                     <div class="col-md-8">
-                        <h6><i class="fas fa-info-circle"></i> Grundinformationen</h6>
+                        <h6><i class="fas fa-info-circle text-primary"></i> Grundinformationen</h6>
                         <table class="table table-sm table-dark">
                             <tr><td><strong>User ID:</strong></td><td><code>${user.id}</code></td></tr>
                             <tr><td><strong>Beigetreten:</strong></td><td>${new Date(user.joined_at).toLocaleString('de-DE')}</td></tr>
-                            <tr><td><strong>Verifikationscode:</strong></td><td>${user.verification_code || 'N/A'}</td></tr>
-                            <tr><td><strong>Persönlicher Channel:</strong></td><td>${user.personal_channel_id || 'Keiner'}</td></tr>
+                            <tr><td><strong>Verifikationscode:</strong></td><td>${user.verification_code ? `<code>${user.verification_code}</code>` : 'N/A'}</td></tr>
+                            <tr><td><strong>Persönlicher Channel:</strong></td><td>${user.personal_channel_id ? `<code>${user.personal_channel_id}</code>` : 'Keiner'}</td></tr>
                         </table>
                     </div>
                 </div>
                 
                 <div class="row mb-4">
                     <div class="col-md-12">
-                        <h6><i class="fas fa-chart-bar"></i> Statistiken</h6>
+                        <h6><i class="fas fa-chart-bar text-success"></i> Statistiken</h6>
                         <div class="row">
                             <div class="col-md-4">
-                                <div class="stat-card text-center p-3" style="background: rgba(255, 0, 102, 0.1); border-radius: 8px;">
-                                    <h4>${stats.message_count}</h4>
+                                <div class="stat-card text-center p-3" style="background: rgba(0, 170, 255, 0.1); border-radius: 8px; border-left: 4px solid var(--info-color);">
+                                    <h4 class="text-info">${stats.message_count}</h4>
                                     <small>Nachrichten</small>
                                 </div>
                             </div>
                             <div class="col-md-4">
-                                <div class="stat-card text-center p-3" style="background: rgba(255, 170, 0, 0.1); border-radius: 8px;">
-                                    <h4>${stats.ticket_count}</h4>
+                                <div class="stat-card text-center p-3" style="background: rgba(255, 170, 0, 0.1); border-radius: 8px; border-left: 4px solid var(--warning-color);">
+                                    <h4 class="text-warning">${stats.ticket_count}</h4>
                                     <small>Tickets</small>
                                 </div>
                             </div>
                             <div class="col-md-4">
-                                <div class="stat-card text-center p-3" style="background: rgba(0, 170, 255, 0.1); border-radius: 8px;">
-                                    <h4>${stats.voice_channel_count}</h4>
+                                <div class="stat-card text-center p-3" style="background: rgba(255, 0, 102, 0.1); border-radius: 8px; border-left: 4px solid var(--primary-pink);">
+                                    <h4 class="text-primary">${stats.voice_channel_count}</h4>
                                     <small>Voice Channels</small>
                                 </div>
                             </div>
@@ -396,20 +453,24 @@ function showUserDetails(userId) {
                 
                 <div class="row">
                     <div class="col-md-12">
-                        <h6><i class="fas fa-history"></i> Letzte Aktivitäten</h6>
+                        <h6><i class="fas fa-history text-warning"></i> Letzte Aktivitäten</h6>
                         <div class="activity-list" style="max-height: 200px; overflow-y: auto;">
                             ${activities.length > 0 ? 
                                 activities.map(activity => `
-                                    <div class="activity-item p-2 mb-2" style="background: rgba(255, 255, 255, 0.05); border-radius: 4px;">
-                                        <i class="fas fa-${activity.type === 'message' ? 'comment' : 'ticket-alt'}"></i>
-                                        ${activity.type === 'message' ? 'Nachricht in' : 'Ticket erstellt:'} 
-                                        <strong>${activity.channel_name}</strong>
-                                        <small class="text-muted float-end">
-                                            ${new Date(activity.timestamp).toLocaleString('de-DE')}
-                                        </small>
+                                    <div class="activity-item p-2 mb-2" style="background: rgba(255, 255, 255, 0.05); border-radius: 4px; border-left: 3px solid var(--primary-pink);">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <i class="fas fa-${activity.type === 'message' ? 'comment' : 'ticket-alt'} text-primary"></i>
+                                                ${activity.type === 'message' ? 'Nachricht in' : 'Ticket erstellt:'} 
+                                                <strong class="text-primary">${activity.channel_name}</strong>
+                                            </div>
+                                            <small class="text-muted">
+                                                ${new Date(activity.timestamp).toLocaleString('de-DE')}
+                                            </small>
+                                        </div>
                                     </div>
                                 `).join('') : 
-                                '<p class="text-muted">Keine Aktivitäten gefunden.</p>'
+                                '<div class="text-center py-3"><i class="fas fa-inbox fa-2x text-muted mb-2"></i><p class="text-muted">Keine Aktivitäten gefunden.</p></div>'
                             }
                         </div>
                     </div>
@@ -417,127 +478,432 @@ function showUserDetails(userId) {
             `;
         })
         .catch(error => {
-            console.error('Error:', error);
-            contentDiv.innerHTML = '<div class="alert alert-danger">Fehler beim Laden der Details</div>';
+            console.error('Error loading user details:', error);
+            contentDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-times-circle"></i> Fehler beim Laden der Details</div>';
         });
 }
 
 function verifyUser(userId) {
-    if (confirm('Möchtest du diesen Benutzer manuell verifizieren?')) {
-        fetch(`/api/users/discord/${userId}/verify`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showToast('Benutzer erfolgreich verifiziert!', 'success');
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                showToast(data.error || 'Fehler bei der Verifikation', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Fehler bei der Verifikation', 'error');
-        });
+    if (!confirm('Möchtest du diesen Benutzer manuell verifizieren?')) {
+        return;
     }
+    
+    fetch(`/api/users/discord/${userId}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Benutzer erfolgreich verifiziert!', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showToast(data.error || 'Fehler bei der Verifikation', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error verifying user:', error);
+        showToast('Fehler bei der Verifikation', 'error');
+    });
 }
 
 // ================================
-// PLACEHOLDER IMPLEMENTATIONS (NOT IMPLEMENTED)
+// MODERATION FUNCTIONS
 // ================================
 
 function moderateUser(userId, action) {
-    if (!FEATURES.DISCORD_MODERATION) {
-        showNotImplementedDialog('Discord Moderation', 
-            'Diese Funktion erfordert eine Discord Bot API Integration. ' +
-            'Folgende Features werden in einer zukünftigen Version verfügbar sein:\n\n' +
-            '• Benutzer kicken/bannen\n' +
-            '• Timeout vergeben\n' +
-            '• Rollen verwalten\n' +
-            '• Kanäle moderieren'
-        );
-        return;
-    }
-    
-    // Original implementation would go here
     currentUserId = userId;
     currentModerationAction = action;
-    // ... rest of moderation logic
+    
+    const actionTexts = {
+        'kick': { title: 'Benutzer kicken', icon: 'door-open', color: 'warning' },
+        'ban': { title: 'Benutzer bannen', icon: 'ban', color: 'danger' },
+        'timeout': { title: 'Timeout vergeben', icon: 'clock', color: 'warning' }
+    };
+    
+    const actionConfig = actionTexts[action] || { title: 'Aktion', icon: 'gavel', color: 'secondary' };
+    
+    const contentDiv = document.getElementById('moderationContent');
+    contentDiv.innerHTML = `
+        <div class="alert alert-${actionConfig.color}">
+            <h5><i class="fas fa-${actionConfig.icon}"></i> ${actionConfig.title}</h5>
+            <p>Du bist dabei, eine Moderationsaktion gegen den Benutzer <strong>${userId}</strong> durchzuführen.</p>
+        </div>
+        
+        <form id="moderationForm">
+            <div class="mb-3">
+                <label for="moderationReason" class="form-label">Grund (optional)</label>
+                <textarea class="form-control" id="moderationReason" rows="3" placeholder="Grund für die Aktion..."></textarea>
+            </div>
+            
+            ${action === 'timeout' ? `
+            <div class="mb-3">
+                <label for="timeoutDuration" class="form-label">Timeout-Dauer (Sekunden)</label>
+                <select class="form-select" id="timeoutDuration">
+                    <option value="300">5 Minuten</option>
+                    <option value="600">10 Minuten</option>
+                    <option value="1800">30 Minuten</option>
+                    <option value="3600">1 Stunde</option>
+                    <option value="7200">2 Stunden</option>
+                    <option value="86400">24 Stunden</option>
+                </select>
+            </div>
+            ` : ''}
+        </form>
+        
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>Warnung:</strong> Diese Aktion wird sofort ausgeführt und kann nicht rückgängig gemacht werden!
+        </div>
+    `;
+    
+    const confirmBtn = document.getElementById('confirmModerationBtn');
+    confirmBtn.innerHTML = `<i class="fas fa-${actionConfig.icon}"></i> ${actionConfig.title}`;
+    confirmBtn.className = `btn btn-${actionConfig.color}`;
+    
+    const modal = new bootstrap.Modal(document.getElementById('moderationModal'));
+    modal.show();
 }
 
-function changeRole(userId, currentRole) {
-    if (!FEATURES.ROLE_MANAGEMENT) {
-        showNotImplementedDialog('Erweiterte Rollenverwaltung',
-            'Automatische Rollenänderungen sind noch nicht implementiert. ' +
-            'Bitte ändere Rollen manuell in der Datenbank oder warte auf ein zukünftiges Update.'
-        );
-        return;
+function confirmModeration() {
+    const reason = document.getElementById('moderationReason').value.trim();
+    const duration = document.getElementById('timeoutDuration')?.value;
+    
+    let endpoint = '';
+    let payload = { reason };
+    
+    switch (currentModerationAction) {
+        case 'kick':
+            endpoint = `/api/users/discord/${currentUserId}/kick`;
+            break;
+        case 'ban':
+            endpoint = `/api/users/discord/${currentUserId}/ban`;
+            break;
+        case 'timeout':
+            endpoint = `/api/users/discord/${currentUserId}/timeout`;
+            payload.duration = parseInt(duration) || 600;
+            break;
+        default:
+            showToast('Unbekannte Aktion', 'error');
+            return;
     }
     
-    // Implementation placeholder
-    showToast('Rollenverwaltung wird implementiert...', 'info');
-}
-
-function showWebUserLogs(userId) {
-    if (!FEATURES.WEB_USER_LOGS) {
-        showNotImplementedDialog('Web User Activity Logs',
-            'Detaillierte Aktivitätslogs für Web-Benutzer sind in Entwicklung. ' +
-            'Diese Funktion wird folgende Informationen enthalten:\n\n' +
-            '• Login/Logout Historie\n' +
-            '• Durchgeführte Aktionen\n' +
-            '• IP-Adressen und Browser\n' +
-            '• Zeitstempel aller Aktivitäten'
-        );
-        return;
-    }
-    
-    // Implementation placeholder
-    showToast('Activity Logs werden geladen...', 'info');
-}
-
-function showWebUserSessions(userId) {
-    if (!FEATURES.SESSION_MANAGEMENT) {
-        showNotImplementedDialog('Session Management',
-            'Erweiterte Session-Verwaltung ist noch nicht verfügbar. ' +
-            'Geplante Features:\n\n' +
-            '• Aktive Sessions anzeigen\n' +
-            '• Remote Session Termination\n' +
-            '• Geräte-Informationen\n' +
-            '• Session-Sicherheit'
-        );
-        return;
-    }
-    
-    // Implementation placeholder
-    showToast('Session Management wird geladen...', 'info');
+    fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('moderationModal'));
+        if (modal) modal.hide();
+        
+        if (data.success) {
+            showToast(`Moderation erfolgreich durchgeführt: ${data.message}`, 'success');
+            setTimeout(() => window.location.reload(), 2000);
+        } else {
+            showToast(`Moderation fehlgeschlagen: ${data.error}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error performing moderation:', error);
+        const modal = bootstrap.Modal.getInstance(document.getElementById('moderationModal'));
+        if (modal) modal.hide();
+        showToast('Fehler bei der Moderation', 'error');
+    });
 }
 
 function resetVerification(userId) {
-    if (!FEATURES.VERIFICATION_RESET) {
-        showNotImplementedDialog('Verifikation zurücksetzen',
-            'Das Zurücksetzen der Discord-Verifikation erfordert Bot-Integration. ' +
-            'Bitte verwende vorerst Discord-Commands direkt oder kontaktiere einen Administrator.'
-        );
+    if (!confirm('Möchtest du die Verifikation für diesen Benutzer zurücksetzen? Ein neuer Verifikationscode wird generiert.')) {
         return;
     }
     
-    // Implementation placeholder
-    showToast('Verifikation wird zurückgesetzt...', 'info');
+    fetch(`/api/users/discord/${userId}/reset-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const alertContent = `
+                <div class="alert alert-success">
+                    <h5><i class="fas fa-check-circle"></i> Verifikation zurückgesetzt!</h5>
+                    <p>Neuer Verifikationscode: <code style="font-size: 1.2em;">${data.newVerificationCode}</code></p>
+                    <hr>
+                    <p class="mb-0"><small>Der Benutzer muss sich erneut mit diesem Code verifizieren.</small></p>
+                </div>
+            `;
+            
+            showModal('Verifikation zurückgesetzt', alertContent, [
+                {
+                    text: 'Code kopieren',
+                    class: 'btn-primary',
+                    action: () => copyToClipboard(data.newVerificationCode)
+                },
+                {
+                    text: 'Schließen',
+                    class: 'btn-secondary',
+                    action: () => setTimeout(() => window.location.reload(), 1000)
+                }
+            ]);
+        } else {
+            showToast(data.error || 'Fehler beim Zurücksetzen', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error resetting verification:', error);
+        showToast('Fehler beim Zurücksetzen der Verifikation', 'error');
+    });
 }
 
 function deletePersonalChannel(userId) {
-    if (!FEATURES.DISCORD_MODERATION) {
-        showNotImplementedDialog('Personal Channel Management',
-            'Das Löschen persönlicher Kanäle erfordert Discord Bot API Integration. ' +
-            'Diese Funktion wird in einer zukünftigen Version verfügbar sein.'
-        );
+    if (!confirm('Möchtest du den persönlichen Channel dieses Benutzers löschen?')) {
         return;
     }
     
-    // Implementation placeholder
-    showToast('Channel-Management wird implementiert...', 'info');
+    fetch(`/api/users/discord/${userId}/delete-channel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message, 'success');
+            setTimeout(() => window.location.reload(), 2000);
+        } else {
+            showToast(data.error || 'Fehler beim Löschen', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting personal channel:', error);
+        showToast('Fehler beim Löschen des Channels', 'error');
+    });
+}
+
+function changeRole(userId, currentRole) {
+    const newRole = currentRole === 'admin' ? 'mod' : 'admin';
+    
+    if (!confirm(`Möchtest du die Rolle zu "${newRole.toUpperCase()}" ändern?`)) {
+        return;
+    }
+    
+    fetch(`/api/users/web/${userId}/change-role`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newRole })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message, 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showToast(data.error || 'Fehler beim Ändern der Rolle', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error changing role:', error);
+        showToast('Fehler beim Ändern der Rolle', 'error');
+    });
+}
+
+function showWebUserLogs(userId) {
+    fetch(`/api/users/web/${userId}/logs`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showToast(data.error, 'error');
+                return;
+            }
+            
+            const logs = data.logs || [];
+            const logsList = logs.length > 0 ? 
+                logs.map(log => `
+                    <div class="log-entry p-2 mb-2" style="background: rgba(255, 255, 255, 0.05); border-radius: 4px; border-left: 3px solid var(--primary-pink);">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong class="text-primary">${log.action}</strong>
+                                <p class="mb-1 small">${log.details || 'Keine Details'}</p>
+                            </div>
+                            <small class="text-muted">
+                                ${new Date(log.timestamp).toLocaleString('de-DE')}
+                            </small>
+                        </div>
+                    </div>
+                `).join('') :
+                '<div class="text-center py-3"><i class="fas fa-inbox fa-2x text-muted mb-2"></i><p class="text-muted">Keine Logs gefunden.</p></div>';
+            
+            const content = `
+                <div class="alert alert-info">
+                    <h5><i class="fas fa-history"></i> Web User Activity Logs</h5>
+                    <p>Zeigt die letzten 50 Aktivitäten dieses Benutzers.</p>
+                </div>
+                <div style="max-height: 400px; overflow-y: auto;">
+                    ${logsList}
+                </div>
+            `;
+            
+            showModal('User Activity Logs', content, [
+                {
+                    text: 'Schließen',
+                    class: 'btn-secondary',
+                    action: null
+                }
+            ]);
+        })
+        .catch(error => {
+            console.error('Error loading user logs:', error);
+            showToast('Fehler beim Laden der Logs', 'error');
+        });
+}
+
+function showWebUserSessions(userId) {
+    // Erst alle anderen Modals schließen
+    forceModalCleanup();
+    
+    // Show loading state
+    const loadingContent = `
+        <div class="text-center">
+            <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+            <p class="mt-2">Lade Sessions...</p>
+        </div>
+    `;
+    
+    showModal('User Sessions', loadingContent, [
+        {
+            text: 'Schließen',
+            class: 'btn-secondary',
+            action: null
+        }
+    ]);
+    
+    // Fetch sessions from server
+    fetch(`/api/users/web/${userId}/sessions`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showToast(data.error, 'error');
+                forceModalCleanup(); // Cleanup bei Fehler
+                return;
+            }
+            
+            const sessions = data.sessions || [];
+            const sessionsList = sessions.length > 0 ? 
+                sessions.map(session => `
+                    <div class="session-entry p-3 mb-2" style="background: rgba(255, 255, 255, 0.05); border-radius: 8px; border-left: 4px solid ${session.current ? 'var(--success-color)' : 'var(--text-muted)'};">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">
+                                    <i class="fas fa-${getDeviceIcon(session.device_type)} text-primary"></i>
+                                    ${session.device_type}
+                                    ${session.current ? '<span class="badge bg-success ms-2">Aktuelle Session</span>' : ''}
+                                </h6>
+                                <p class="mb-1 small text-muted">
+                                    <i class="fas fa-calendar-alt"></i> Erstellt: ${new Date(session.created_at).toLocaleString('de-DE')}
+                                </p>
+                                <p class="mb-0 small">
+                                    <strong>Letzte Aktivität:</strong> ${new Date(session.last_activity).toLocaleString('de-DE')}
+                                </p>
+                            </div>
+                            <div>
+                                ${!session.current ? `
+                                    <button class="btn btn-outline-danger btn-sm" onclick="terminateSession('${session.session_id}', '${userId}')">
+                                        <i class="fas fa-times"></i> Beenden
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `).join('') :
+                '<div class="text-center py-3"><i class="fas fa-desktop fa-2x text-muted mb-2"></i><p class="text-muted">Keine aktiven Sessions gefunden.</p></div>';
+            
+            const content = `
+                <div class="alert alert-info">
+                    <h5><i class="fas fa-desktop"></i> Aktive Sessions</h5>
+                    <p>Übersicht über alle aktiven Anmeldungen dieses Benutzers.</p>
+                </div>
+                ${sessionsList}
+            `;
+            
+            // Update existing modal content
+            showModal('User Sessions', content, [
+                {
+                    text: 'Alle anderen Sessions beenden',
+                    class: 'btn-warning',
+                    action: () => terminateAllOtherSessions(userId)
+                },
+                {
+                    text: 'Schließen',
+                    class: 'btn-secondary',
+                    action: null
+                }
+            ]);
+        })
+        .catch(error => {
+            console.error('Error loading user sessions:', error);
+            showToast('Fehler beim Laden der Sessions', 'error');
+            forceModalCleanup(); // Cleanup bei Fehler
+        });
+}
+
+function getDeviceIcon(deviceType) {
+    const iconMap = {
+        'Desktop': 'desktop',
+        'Mobile': 'mobile-alt',
+        'Tablet': 'tablet-alt',
+        'Unknown': 'question-circle'
+    };
+    return iconMap[deviceType] || 'question-circle';
+}
+
+function terminateSession(sessionId, userId) {
+    if (!confirm('Möchtest du diese Session beenden?')) {
+        return;
+    }
+    
+    fetch(`/api/users/web/${userId}/sessions/${sessionId}/terminate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Session erfolgreich beendet', 'success');
+            // Refresh session list
+            showWebUserSessions(userId);
+        } else {
+            showToast(data.error || 'Fehler beim Beenden der Session', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error terminating session:', error);
+        showToast('Fehler beim Beenden der Session', 'error');
+    });
+}
+
+function terminateAllOtherSessions(userId) {
+    if (!confirm('Möchtest du alle anderen Sessions dieses Benutzers beenden? Der Benutzer wird dann nur noch in der aktuellen Session angemeldet sein.')) {
+        return;
+    }
+    
+    fetch(`/api/users/web/${userId}/sessions/terminate-others`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(`${data.terminated_count} Sessions beendet`, 'success');
+            // Refresh session list
+            showWebUserSessions(userId);
+        } else {
+            showToast(data.error || 'Fehler beim Beenden der Sessions', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error terminating sessions:', error);
+        showToast('Fehler beim Beenden der Sessions', 'error');
+    });
 }
 
 // ================================
@@ -550,11 +916,47 @@ function openDiscordProfile(userId) {
 }
 
 function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(() => {
-        showToast('In Zwischenablage kopiert!', 'success');
-    }).catch(() => {
-        showToast('Fehler beim Kopieren', 'error');
-    });
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('In Zwischenablage kopiert!', 'success');
+        }).catch(() => {
+            fallbackCopyToClipboard(text);
+        });
+    } else {
+        fallbackCopyToClipboard(text);
+    }
+}
+
+function fallbackCopyToClipboard(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.top = '0';
+    textArea.style.left = '0';
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+    textArea.style.padding = '0';
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+    textArea.style.background = 'transparent';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+            showToast('In Zwischenablage kopiert!', 'success');
+        } else {
+            showToast('Kopieren fehlgeschlagen', 'error');
+        }
+    } catch (err) {
+        console.error('Fallback copy failed:', err);
+        showToast('Kopieren fehlgeschlagen', 'error');
+    }
+    
+    document.body.removeChild(textArea);
 }
 
 function refreshUserData() {
@@ -566,24 +968,31 @@ function refreshUserData() {
 }
 
 function exportUsers() {
-    const discordData = Array.from(document.querySelectorAll('.discord-user-row')).map(row => {
-        const username = row.querySelector('.username strong').textContent;
-        const userId = row.querySelector('code').textContent;
-        const status = row.querySelector('.badge').textContent.trim();
-        const joinDate = row.querySelector('.join-date').textContent;
+    const discordRows = document.querySelectorAll('.discord-user-row');
+    const webRows = document.querySelectorAll('.web-user-row');
+    
+    const discordData = Array.from(discordRows).map(row => {
+        const username = row.querySelector('.username strong')?.textContent || 'N/A';
+        const userId = row.querySelector('code')?.textContent || 'N/A';
+        const status = row.querySelector('.badge')?.textContent.trim() || 'N/A';
+        const joinDate = row.querySelector('.join-date')?.textContent || 'N/A';
         return `"${username}","${userId}","${status}","${joinDate}","Discord"`;
     });
     
-    const webData = Array.from(document.querySelectorAll('.web-user-row')).map(row => {
-        const username = row.querySelector('.username strong').textContent;
-        const role = row.querySelector('.role-badge').textContent.trim();
-        const created = row.querySelector('.created-date').textContent.split('\n')[1];
-        const lastLogin = row.querySelector('.last-login').textContent.split('\n')[1];
+    const webData = Array.from(webRows).map(row => {
+        const username = row.querySelector('.username strong')?.textContent || 'N/A';
+        const role = row.querySelector('.role-badge')?.textContent.trim() || 'N/A';
+        const createdElements = row.querySelectorAll('.login-info div');
+        const created = createdElements.length > 0 ? createdElements[0]?.textContent.split('\n')[1]?.trim() || 'N/A' : 'N/A';
+        const lastLogin = createdElements.length > 1 ? createdElements[1]?.textContent.split('\n')[1]?.trim() || 'N/A' : 'N/A';
         return `"${username}","N/A","${role}","${created}","Web","${lastLogin}"`;
     });
     
     let csv = 'Benutzername,User ID,Status/Rolle,Erstellt/Beigetreten,Typ,Letzter Login\n';
-    csv += discordData.join('\n') + '\n';
+    csv += discordData.join('\n');
+    if (discordData.length > 0 && webData.length > 0) {
+        csv += '\n';
+    }
     csv += webData.join('\n');
     
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -595,44 +1004,142 @@ function exportUsers() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    showToast('Benutzerdaten exportiert!', 'success');
 }
 
 // ================================
 // UI HELPER FUNCTIONS
 // ================================
 
-function showNotImplementedDialog(featureName, description) {
-    const alertHtml = `
-        <div class="alert alert-info alert-dismissible fade show" role="alert">
-            <h6><i class="fas fa-info-circle"></i> ${featureName}</h6>
-            <p style="margin-bottom: 0; white-space: pre-line;">${description}</p>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    `;
+// ================================
+// MODAL FIX - Ersetzt die showModal Funktion
+// ================================
+
+function showModal(title, content, buttons = []) {
+    // Create dynamic modal if it doesn't exist
+    let modal = document.getElementById('dynamicModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'dynamicModal';
+        modal.className = 'modal fade';
+        modal.tabIndex = -1;
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content bg-dark">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="dynamicModalTitle"></h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" id="dynamicModalBody"></div>
+                    <div class="modal-footer" id="dynamicModalFooter"></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
     
-    // Insert at top of page
-    const container = document.querySelector('.main-content') || document.body;
-    container.insertAdjacentHTML('afterbegin', alertHtml);
+    // Set content
+    document.getElementById('dynamicModalTitle').innerHTML = title;
+    document.getElementById('dynamicModalBody').innerHTML = content;
     
-    // Auto-remove after 10 seconds
-    setTimeout(() => {
-        const alert = container.querySelector('.alert');
-        if (alert) {
-            const bsAlert = new bootstrap.Alert(alert);
-            bsAlert.close();
+    // Set buttons
+    const footer = document.getElementById('dynamicModalFooter');
+    footer.innerHTML = '';
+    
+    buttons.forEach(button => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `btn ${button.class}`;
+        btn.textContent = button.text;
+        
+        if (button.action) {
+            btn.onclick = () => {
+                try {
+                    button.action();
+                } catch (error) {
+                    console.error('Button action error:', error);
+                }
+                // Immer Modal schließen nach Aktion
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+            };
+        } else {
+            btn.setAttribute('data-bs-dismiss', 'modal');
         }
-    }, 10000);
+        
+        footer.appendChild(btn);
+    });
+    
+    // Cleanup bei Modal-Schließung
+    modal.addEventListener('hidden.bs.modal', function () {
+        // Entferne alle Modal-Backdrops
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(backdrop => backdrop.remove());
+        
+        // Stelle sicher dass body nicht mehr modal-open Klasse hat
+        document.body.classList.remove('modal-open');
+        
+        // Entferne inline styles vom body
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+    });
+    
+    // Show modal
+    const modalInstance = new bootstrap.Modal(modal, {
+        backdrop: true,
+        keyboard: true
+    });
+    modalInstance.show();
+}
+
+function forceModalCleanup() {
+    // Alle Modals schließen
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        const modalInstance = bootstrap.Modal.getInstance(modal);
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+    });
+    
+    // Alle Backdrops entfernen
+    const backdrops = document.querySelectorAll('.modal-backdrop');
+    backdrops.forEach(backdrop => backdrop.remove());
+    
+    // Body zurücksetzen
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+    
+    console.log('Modal cleanup forced');
 }
 
 function showToast(message, type = 'info') {
     const toastContainer = getOrCreateToastContainer();
     const toastId = 'toast-' + Date.now();
     
+    const icons = {
+        'success': 'fas fa-check-circle',
+        'error': 'fas fa-exclamation-circle',
+        'warning': 'fas fa-exclamation-triangle',
+        'info': 'fas fa-info-circle'
+    };
+    
+    const colors = {
+        'success': 'bg-success',
+        'error': 'bg-danger',
+        'warning': 'bg-warning',
+        'info': 'bg-info'
+    };
+    
     const toastHtml = `
-        <div id="${toastId}" class="toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0" role="alert">
+        <div id="${toastId}" class="toast align-items-center text-white ${colors[type]} border-0" role="alert">
             <div class="d-flex">
                 <div class="toast-body">
-                    <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'times' : 'info'}"></i>
+                    <i class="${icons[type]}"></i>
                     ${message}
                 </div>
                 <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
@@ -642,7 +1149,7 @@ function showToast(message, type = 'info') {
     
     toastContainer.insertAdjacentHTML('beforeend', toastHtml);
     const toastElement = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+    const toast = new bootstrap.Toast(toastElement, { delay: 4000 });
     toast.show();
     
     toastElement.addEventListener('hidden.bs.toast', () => {
@@ -663,14 +1170,22 @@ function getOrCreateToastContainer() {
 }
 
 // ================================
-// EVENT LISTENERS
+// KEYBOARD SHORTCUTS
 // ================================
 
-// Real-time search for Discord users
-document.getElementById('discordSearch')?.addEventListener('input', filterDiscordUsers);
-
-// Keyboard Shortcuts
-document.addEventListener('keydown', function(e) {
+function handleKeyboardShortcuts(e) {
+    // Escape um Modals zu schließen UND cleanup zu machen
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        forceModalCleanup();
+        return;
+    }
+    
+    // Restliche Shortcuts nur wenn kein Modal offen ist
+    if (document.querySelector('.modal.show')) {
+        return;
+    }
+    
     // Ctrl/Cmd + F für Suche
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
@@ -678,17 +1193,6 @@ document.addEventListener('keydown', function(e) {
         if (searchInput) {
             searchInput.focus();
         }
-    }
-    
-    // Escape um Modals zu schließen
-    if (e.key === 'Escape') {
-        const modals = document.querySelectorAll('.modal.show');
-        modals.forEach(modal => {
-            const modalInstance = bootstrap.Modal.getInstance(modal);
-            if (modalInstance) {
-                modalInstance.hide();
-            }
-        });
     }
     
     // Ctrl/Cmd + N für neuen Benutzer
@@ -708,52 +1212,67 @@ document.addEventListener('keydown', function(e) {
         e.preventDefault();
         refreshUserData();
     }
+}
+
+// ================================
+// ERROR HANDLING
+// ================================
+
+function handleApiError(error, context = '') {
+    console.error(`API Error ${context}:`, error);
+    
+    if (error.message && error.message.includes('401')) {
+        showToast('Sitzung abgelaufen. Bitte melde dich erneut an.', 'error');
+        setTimeout(() => window.location.href = '/login', 2000);
+    } else if (error.message && error.message.includes('403')) {
+        showToast('Keine Berechtigung für diese Aktion.', 'error');
+    } else if (error.message && error.message.includes('404')) {
+        showToast('Ressource nicht gefunden.', 'error');
+    } else if (error.message && error.message.includes('500')) {
+        showToast('Serverfehler. Bitte versuche es später erneut.', 'error');
+    } else {
+        showToast(error.message || 'Ein unbekannter Fehler ist aufgetreten.', 'error');
+    }
+}
+
+// ================================
+// INITIALIZATION & CLEANUP
+// ================================
+
+// Page initialization
+function initializePage() {
+    console.log('14th Squad User Management - Initializing...');
+    
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Initialize popovers
+    const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+    popoverTriggerList.map(function (popoverTriggerEl) {
+        return new bootstrap.Popover(popoverTriggerEl);
+    });
+    
+    console.log('14th Squad User Management - Ready!');
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    console.log('14th Squad User Management - Cleanup complete');
 });
 
-// ================================
-// ADVANCED FEATURES (PLACEHOLDER IMPLEMENTATIONS)
-// ================================
-
-// Future Implementation: Advanced Search
-function advancedUserSearch(criteria) {
-    // TODO: Implement advanced search with multiple criteria
-    console.log('Advanced search not yet implemented:', criteria);
-    showToast('Erweiterte Suche wird in einer zukünftigen Version verfügbar sein', 'info');
-}
-
-// Future Implementation: Bulk Operations
-function bulkUserOperations(action, userIds) {
-    // TODO: Implement bulk operations for multiple users
-    console.log('Bulk operations not yet implemented:', action, userIds);
-    showToast('Bulk-Operationen werden in einer zukünftigen Version verfügbar sein', 'info');
-}
-
-// Future Implementation: User Analytics
-function generateUserAnalytics() {
-    // TODO: Generate detailed analytics about user behavior
-    console.log('User analytics not yet implemented');
-    showToast('Benutzer-Analytik wird in einer zukünftigen Version verfügbar sein', 'info');
-}
-
-// Future Implementation: Advanced Permissions
-function manageAdvancedPermissions(userId, permissions) {
-    // TODO: Implement granular permission management
-    console.log('Advanced permissions not yet implemented:', userId, permissions);
-    showToast('Erweiterte Berechtigungen werden in einer zukünftigen Version verfügbar sein', 'info');
+// Auto-run initialization when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializePage);
+} else {
+    initializePage();
 }
 
 // ================================
-// DEBUG & DEVELOPMENT HELPERS
+// DEBUG HELPERS
 // ================================
-
-// Development helper: Log feature flags
-function logFeatureFlags() {
-    console.group('14th Squad - Feature Flags');
-    Object.entries(FEATURES).forEach(([feature, enabled]) => {
-        console.log(`${feature}: ${enabled ? '✅ Enabled' : '❌ Disabled'}`);
-    });
-    console.groupEnd();
-}
 
 // Development helper: Test all toast types
 function testToasts() {
@@ -773,173 +1292,10 @@ function simulateApiCall(endpoint, method = 'GET', data = null) {
     });
 }
 
-// ================================
-// INITIALIZATION & CLEANUP
-// ================================
-
-// Page initialization
-function initializePage() {
-    console.log('14th Squad User Management - Initializing...');
-    
-    // Log feature status
-    if (window.location.search.includes('debug=true')) {
-        logFeatureFlags();
-    }
-    
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-    
-    // Initialize popovers
-    const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-    popoverTriggerList.map(function (popoverTriggerEl) {
-        return new bootstrap.Popover(popoverTriggerEl);
-    });
-    
-    console.log('14th Squad User Management - Ready!');
-}
-
-// Cleanup on page unload
-window.addEventListener('beforeunload', function() {
-    // Clear any running intervals
-    // Cleanup event listeners if needed
-    console.log('14th Squad User Management - Cleanup complete');
-});
-
-// Auto-run initialization when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializePage);
-} else {
-    initializePage();
-}
-
-// ================================
-// API INTEGRATION HELPERS
-// ================================
-
-// Helper for consistent API calls
-async function apiCall(endpoint, method = 'GET', data = null) {
-    const options = {
-        method: method,
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    };
-    
-    if (data) {
-        options.body = JSON.stringify(data);
-    }
-    
-    try {
-        const response = await fetch(endpoint, options);
-        const result = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(result.error || `HTTP ${response.status}`);
-        }
-        
-        return result;
-    } catch (error) {
-        console.error(`API call failed: ${method} ${endpoint}`, error);
-        throw error;
-    }
-}
-
-// Helper for handling API errors consistently
-function handleApiError(error, context = '') {
-    console.error(`API Error ${context}:`, error);
-    
-    if (error.message.includes('401')) {
-        showToast('Sitzung abgelaufen. Bitte melde dich erneut an.', 'error');
-        setTimeout(() => window.location.href = '/login', 2000);
-    } else if (error.message.includes('403')) {
-        showToast('Keine Berechtigung für diese Aktion.', 'error');
-    } else if (error.message.includes('404')) {
-        showToast('Ressource nicht gefunden.', 'error');
-    } else if (error.message.includes('500')) {
-        showToast('Serverfehler. Bitte versuche es später erneut.', 'error');
-    } else {
-        showToast(error.message || 'Ein unbekannter Fehler ist aufgetreten.', 'error');
-    }
-}
-
-// ================================
-// FEATURE FLAG MANAGEMENT
-// ================================
-
-// Update feature flags (for future use)
-function updateFeatureFlags(newFlags) {
-    Object.assign(FEATURES, newFlags);
-    initializeFeatureFlags();
-    console.log('Feature flags updated:', FEATURES);
-}
-
-// Check if feature is enabled
-function isFeatureEnabled(featureName) {
-    return FEATURES[featureName] === true;
-}
-
-// Enable a specific feature
-function enableFeature(featureName) {
-    if (FEATURES.hasOwnProperty(featureName)) {
-        FEATURES[featureName] = true;
-        initializeFeatureFlags();
-        showToast(`Feature "${featureName}" aktiviert!`, 'success');
-    } else {
-        console.warn(`Unknown feature: ${featureName}`);
-    }
-}
-
-// Disable a specific feature
-function disableFeature(featureName) {
-    if (FEATURES.hasOwnProperty(featureName)) {
-        FEATURES[featureName] = false;
-        initializeFeatureFlags();
-        showToast(`Feature "${featureName}" deaktiviert!`, 'warning');
-    } else {
-        console.warn(`Unknown feature: ${featureName}`);
-    }
-}
-
-// ================================
-// EXPORT FOR POTENTIAL MODULE USE
-// ================================
-
-// If this script is ever converted to a module, export the main functions
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        // Main functions
-        loadAllUserStats,
-        filterDiscordUsers,
-        filterWebUsers,
-        createWebUser,
-        verifyUser,
-        showUserDetails,
-        
-        // Utility functions
-        showToast,
-        copyToClipboard,
-        refreshUserData,
-        exportUsers,
-        
-        // Feature management
-        isFeatureEnabled,
-        enableFeature,
-        disableFeature,
-        
-        // API helpers
-        apiCall,
-        handleApiError
-    };
-}
-
 // Make some functions globally available for debugging
 window.SquadUserManagement = {
     testToasts,
-    logFeatureFlags,
-    enableFeature,
-    disableFeature,
-    simulateApiCall
+    simulateApiCall,
+    showModal,
+    showToast
 };
