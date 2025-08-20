@@ -300,7 +300,7 @@ function regenerateUniquePassword(userId) {
                 {
                     text: 'Kopieren',
                     class: 'btn-primary',
-                    action: () => copyToClipboard(data.uniquePassword)
+                    action: () => SquadUtils.copyToClipboard(data.uniquePassword)
                 },
                 {
                     text: 'Schließen',
@@ -309,12 +309,12 @@ function regenerateUniquePassword(userId) {
                 }
             ]);
         } else {
-            showToast(data.error || 'Fehler beim Regenerieren', 'error');
+            SquadUtils.showToast(data.error || 'Fehler beim Regenerieren', 'error');
         }
     })
     .catch(error => {
         console.error('Error regenerating unique password:', error);
-        showToast('Fehler beim Regenerieren', 'error');
+        SquadUtils.showToast('Fehler beim Regenerieren', 'error');
     });
 }
 
@@ -330,15 +330,15 @@ function deleteWebUser(userId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showToast('Benutzer erfolgreich gelöscht!', 'success');
+            SquadUtils.showToast('Benutzer erfolgreich gelöscht!', 'success');
             setTimeout(() => window.location.reload(), 1000);
         } else {
-            showToast(data.error || 'Fehler beim Löschen', 'error');
+            SquadUtils.showToast(data.error || 'Fehler beim Löschen', 'error');
         }
     })
     .catch(error => {
         console.error('Error deleting user:', error);
-        showToast('Fehler beim Löschen', 'error');
+        SquadUtils.showToast('Fehler beim Löschen', 'error');
     });
 }
 
@@ -459,15 +459,15 @@ function verifyUser(userId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showToast('Benutzer erfolgreich verifiziert!', 'success');
+            SquadUtils.showToast('Benutzer erfolgreich verifiziert!', 'success');
             setTimeout(() => window.location.reload(), 1000);
         } else {
-            showToast(data.error || 'Fehler bei der Verifikation', 'error');
+            SquadUtils.showToast(data.error || 'Fehler bei der Verifikation', 'error');
         }
     })
     .catch(error => {
         console.error('Error verifying user:', error);
-        showToast('Fehler bei der Verifikation', 'error');
+        SquadUtils.showToast('Fehler bei der Verifikation', 'error');
     });
 }
 
@@ -544,7 +544,7 @@ function confirmModeration() {
             payload.duration = parseInt(duration) || 600;
             break;
         default:
-            showToast('Unbekannte Aktion', 'error');
+            SquadUtils.showToast('Unbekannte Aktion', 'error');
             return;
     }
     
@@ -559,17 +559,17 @@ function confirmModeration() {
         if (modal) modal.hide();
         
         if (data.success) {
-            showToast(`Moderation erfolgreich durchgeführt: ${data.message}`, 'success');
+            SquadUtils.showToast(`Moderation erfolgreich durchgeführt: ${data.message}`, 'success');
             setTimeout(() => window.location.reload(), 2000);
         } else {
-            showToast(`Moderation fehlgeschlagen: ${data.error}`, 'error');
+            SquadUtils.showToast(`Moderation fehlgeschlagen: ${data.error}`, 'error');
         }
     })
     .catch(error => {
         console.error('Error performing moderation:', error);
         const modal = bootstrap.Modal.getInstance(document.getElementById('moderationModal'));
         if (modal) modal.hide();
-        showToast('Fehler bei der Moderation', 'error');
+        SquadUtils.showToast('Fehler bei der Moderation', 'error');
     });
 }
 
@@ -598,7 +598,7 @@ function resetVerification(userId) {
                 {
                     text: 'Code kopieren',
                     class: 'btn-primary',
-                    action: () => copyToClipboard(data.newVerificationCode)
+                    action: () => SquadUtils.copyToClipboard(data.newVerificationCode)
                 },
                 {
                     text: 'Schließen',
@@ -607,12 +607,12 @@ function resetVerification(userId) {
                 }
             ]);
         } else {
-            showToast(data.error || 'Fehler beim Zurücksetzen', 'error');
+            SquadUtils.showToast(data.error || 'Fehler beim Zurücksetzen', 'error');
         }
     })
     .catch(error => {
         console.error('Error resetting verification:', error);
-        showToast('Fehler beim Zurücksetzen der Verifikation', 'error');
+        SquadUtils.showToast('Fehler beim Zurücksetzen der Verifikation', 'error');
     });
 }
 
@@ -628,15 +628,15 @@ function deletePersonalChannel(userId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showToast(data.message, 'success');
+            SquadUtils.showToast(data.message, 'success');
             setTimeout(() => window.location.reload(), 2000);
         } else {
-            showToast(data.error || 'Fehler beim Löschen', 'error');
+            SquadUtils.showToast(data.error || 'Fehler beim Löschen', 'error');
         }
     })
     .catch(error => {
         console.error('Error deleting personal channel:', error);
-        showToast('Fehler beim Löschen des Channels', 'error');
+        SquadUtils.showToast('Fehler beim Löschen des Channels', 'error');
     });
 }
 
@@ -655,15 +655,15 @@ function changeRole(userId, currentRole) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showToast(data.message, 'success');
+            SquadUtils.showToast(data.message, 'success');
             setTimeout(() => window.location.reload(), 1000);
         } else {
-            showToast(data.error || 'Fehler beim Ändern der Rolle', 'error');
+            SquadUtils.showToast(data.error || 'Fehler beim Ändern der Rolle', 'error');
         }
     })
     .catch(error => {
         console.error('Error changing role:', error);
-        showToast('Fehler beim Ändern der Rolle', 'error');
+        SquadUtils.showToast('Fehler beim Ändern der Rolle', 'error');
     });
 }
 
@@ -672,7 +672,7 @@ function showWebUserLogs(userId) {
         .then(response => response.json())
         .then(data => {
             if (data.error) {
-                showToast(data.error, 'error');
+                SquadUtils.showToast(data.error, 'error');
                 return;
             }
             
@@ -713,7 +713,7 @@ function showWebUserLogs(userId) {
         })
         .catch(error => {
             console.error('Error loading user logs:', error);
-            showToast('Fehler beim Laden der Logs', 'error');
+            SquadUtils.showToast('Fehler beim Laden der Logs', 'error');
         });
 }
 
@@ -739,7 +739,7 @@ function showWebUserSessions(userId) {
         .then(response => response.json())
         .then(data => {
             if (data.error) {
-                showToast(data.error, 'error');
+                SquadUtils.showToast(data.error, 'error');
                 forceModalCleanup();
                 return;
             }
@@ -797,7 +797,7 @@ function showWebUserSessions(userId) {
         })
         .catch(error => {
             console.error('Error loading user sessions:', error);
-            showToast('Fehler beim Laden der Sessions', 'error');
+            SquadUtils.showToast('Fehler beim Laden der Sessions', 'error');
             forceModalCleanup();
         });
 }
@@ -824,10 +824,10 @@ function terminateSession(sessionId, userId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showToast('Session erfolgreich beendet', 'success');
+            SquadUtils.showToast('Session erfolgreich beendet', 'success');
             showWebUserSessions(userId);
         } else {
-            showToast(data.error || 'Fehler beim Beenden der Session', 'error');
+            SquadUtils.showToast(data.error || 'Fehler beim Beenden der Session', 'error');
         }
     })
     .catch(error => {
@@ -848,15 +848,15 @@ function terminateAllOtherSessions(userId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showToast(`${data.terminated_count} Sessions beendet`, 'success');
+            SquadUtils.showToast(`${data.terminated_count} Sessions beendet`, 'success');
             showWebUserSessions(userId);
         } else {
-            showToast(data.error || 'Fehler beim Beenden der Sessions', 'error');
+            SquadUtils.showToast(data.error || 'Fehler beim Beenden der Sessions', 'error');
         }
     })
     .catch(error => {
         console.error('Error terminating sessions:', error);
-        showToast('Fehler beim Beenden der Sessions', 'error');
+        SquadUtils.showToast('Fehler beim Beenden der Sessions', 'error');
     });
 }
 
@@ -865,55 +865,11 @@ function openDiscordProfile(userId) {
     window.open(discordUrl, '_blank');
 }
 
-function copyToClipboard(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(text).then(() => {
-            showToast('In Zwischenablage kopiert!', 'success');
-        }).catch(() => {
-            fallbackCopyToClipboard(text);
-        });
-    } else {
-        fallbackCopyToClipboard(text);
-    }
-}
-
-function fallbackCopyToClipboard(text) {
-    const textArea = document.createElement('textarea');
-    textArea.value = text;
-    textArea.style.position = 'fixed';
-    textArea.style.top = '0';
-    textArea.style.left = '0';
-    textArea.style.width = '2em';
-    textArea.style.height = '2em';
-    textArea.style.padding = '0';
-    textArea.style.border = 'none';
-    textArea.style.outline = 'none';
-    textArea.style.boxShadow = 'none';
-    textArea.style.background = 'transparent';
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-    
-    try {
-        const successful = document.execCommand('copy');
-        if (successful) {
-            showToast('In Zwischenablage kopiert!', 'success');
-        } else {
-            showToast('Kopieren fehlgeschlagen', 'error');
-        }
-    } catch (err) {
-        console.error('Fallback copy failed:', err);
-        showToast('Kopieren fehlgeschlagen', 'error');
-    }
-    
-    document.body.removeChild(textArea);
-}
-
 function refreshUserData() {
-    showToast('Daten werden aktualisiert...', 'info');
+    SquadUtils.showToast('Daten werden aktualisiert...', 'info');
     loadAllUserStats();
     setTimeout(() => {
-        showToast('Daten aktualisiert!', 'success');
+        SquadUtils.showToast('Daten aktualisiert!', 'success');
     }, 1000);
 }
 
@@ -955,7 +911,7 @@ function exportUsers() {
     link.click();
     document.body.removeChild(link);
     
-    showToast('Benutzerdaten exportiert!', 'success');
+    SquadUtils.showToast('Benutzerdaten exportiert!', 'success');
 }
 
 function showModal(title, content, buttons = []) {
@@ -1047,46 +1003,6 @@ function forceModalCleanup() {
     console.log('Modal cleanup forced');
 }
 
-function showToast(message, type = 'info') {
-    const toastContainer = getOrCreateToastContainer();
-    const toastId = 'toast-' + Date.now();
-    
-    const icons = {
-        'success': 'fas fa-check-circle',
-        'error': 'fas fa-exclamation-circle',
-        'warning': 'fas fa-exclamation-triangle',
-        'info': 'fas fa-info-circle'
-    };
-    
-    const colors = {
-        'success': 'bg-success',
-        'error': 'bg-danger',
-        'warning': 'bg-warning',
-        'info': 'bg-info'
-    };
-    
-    const toastHtml = `
-        <div id="${toastId}" class="toast align-items-center text-white ${colors[type]} border-0" role="alert">
-            <div class="d-flex">
-                <div class="toast-body">
-                    <i class="${icons[type]}"></i>
-                    ${message}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-            </div>
-        </div>
-    `;
-    
-    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-    const toastElement = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastElement, { delay: 4000 });
-    toast.show();
-    
-    toastElement.addEventListener('hidden.bs.toast', () => {
-        toastElement.remove();
-    });
-}
-
 function getOrCreateToastContainer() {
     let container = document.getElementById('toast-container');
     if (!container) {
@@ -1138,16 +1054,16 @@ function handleApiError(error, context = '') {
     console.error(`API Error ${context}:`, error);
     
     if (error.message && error.message.includes('401')) {
-        showToast('Sitzung abgelaufen. Bitte melde dich erneut an.', 'error');
+        SquadUtils.showToast('Sitzung abgelaufen. Bitte melde dich erneut an.', 'error');
         setTimeout(() => window.location.href = '/login', 2000);
     } else if (error.message && error.message.includes('403')) {
-        showToast('Keine Berechtigung für diese Aktion.', 'error');
+        SquadUtils.showToast('Keine Berechtigung für diese Aktion.', 'error');
     } else if (error.message && error.message.includes('404')) {
-        showToast('Ressource nicht gefunden.', 'error');
+        SquadUtils.showToast('Ressource nicht gefunden.', 'error');
     } else if (error.message && error.message.includes('500')) {
-        showToast('Serverfehler. Bitte versuche es später erneut.', 'error');
+        SquadUtils.showToast('Serverfehler. Bitte versuche es später erneut.', 'error');
     } else {
-        showToast(error.message || 'Ein unbekannter Fehler ist aufgetreten.', 'error');
+        SquadUtils.showToast(error.message || 'Ein unbekannter Fehler ist aufgetreten.', 'error');
     }
 }
 
@@ -1178,10 +1094,10 @@ if (document.readyState === 'loading') {
 }
 
 function testToasts() {
-    showToast('Success message', 'success');
-    setTimeout(() => showToast('Error message', 'error'), 1000);
-    setTimeout(() => showToast('Info message', 'info'), 2000);
-    setTimeout(() => showToast('Warning message', 'warning'), 3000);
+    SquadUtils.showToast('Success message', 'success');
+    setTimeout(() => SquadUtils.showToast('Error message', 'error'), 1000);
+    setTimeout(() => SquadUtils.showToast('Info message', 'info'), 2000);
+    setTimeout(() => SquadUtils.showToast('Warning message', 'warning'), 3000);
 }
 
 function simulateApiCall(endpoint, method = 'GET', data = null) {
@@ -1196,6 +1112,5 @@ function simulateApiCall(endpoint, method = 'GET', data = null) {
 window.SquadUserManagement = {
     testToasts,
     simulateApiCall,
-    showModal,
-    showToast
+    showModal
 };

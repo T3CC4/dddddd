@@ -191,10 +191,10 @@
 
 .sidebar {
     position: fixed;
-    top: 56px; 
+    top: 62px; 
     left: 0;
     width: 250px;
-    height: calc(100vh - 56px);
+    height: calc(100vh - 62px);
     background: rgba(17, 17, 17, 0.95);
     border-right: 2px solid var(--primary-pink);
     backdrop-filter: var(--backdrop-blur);
