@@ -1,31 +1,20 @@
-/* ========================================
-   14TH SQUAD - USERS.JS
-   User Management JavaScript - Vollständig implementiert
-   ======================================== */
-
 let currentUserId = null;
 let currentModerationAction = null;
 
-// Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadAllUserStats();
-    
-    // Auto-refresh stats every 30 seconds
+ 
     setInterval(loadAllUserStats, 30000);
     
-    // Initialize event listeners
     setupEventListeners();
 });
 
-// Setup Event Listeners
 function setupEventListeners() {
-    // Real-time search for Discord users
     const discordSearch = document.getElementById('discordSearch');
     if (discordSearch) {
         discordSearch.addEventListener('input', filterDiscordUsers);
     }
-    
-    // Filter change listeners
+
     const discordFilter = document.getElementById('discordFilter');
     if (discordFilter) {
         discordFilter.addEventListener('change', filterDiscordUsers);
@@ -35,14 +24,9 @@ function setupEventListeners() {
     if (webUserFilter) {
         webUserFilter.addEventListener('change', filterWebUsers);
     }
-    
-    // Keyboard Shortcuts
+
     document.addEventListener('keydown', handleKeyboardShortcuts);
 }
-
-// ================================
-// USER STATISTICS
-// ================================
 
 function loadAllUserStats() {
     const discordUsers = document.querySelectorAll('.discord-user-row');
@@ -87,10 +71,6 @@ function loadUserStats(userId) {
         });
 }
 
-// ================================
-// FILTERING
-// ================================
-
 function filterDiscordUsers() {
     const searchInput = document.getElementById('discordSearch');
     const filterSelect = document.getElementById('discordFilter');
@@ -115,8 +95,7 @@ function filterDiscordUsers() {
             row.style.display = 'none';
         }
     });
-    
-    // Update tab count
+
     const tab = document.getElementById('discord-users-tab');
     if (tab) {
         const originalText = tab.innerHTML;
@@ -144,8 +123,7 @@ function filterWebUsers() {
             row.style.display = 'none';
         }
     });
-    
-    // Update tab count
+
     const tab = document.getElementById('web-users-tab');
     if (tab) {
         const originalText = tab.innerHTML;
@@ -155,10 +133,6 @@ function filterWebUsers() {
         }
     }
 }
-
-// ================================
-// WEB USER MANAGEMENT
-// ================================
 
 function showCreateWebUserModal() {
     const form = document.getElementById('createWebUserForm');
@@ -177,7 +151,6 @@ function createWebUser() {
     const role = document.getElementById('newRole').value;
     const resultDiv = document.getElementById('createUserResult');
     
-    // Validation
     if (!username || !password || !role) {
         resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Alle Felder sind erforderlich!</div>';
         return;
@@ -198,7 +171,6 @@ function createWebUser() {
         return;
     }
     
-    // Show loading
     resultDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Erstelle Benutzer...</div>';
     
     fetch('/users/web/create', {
@@ -224,7 +196,6 @@ function createWebUser() {
                 </div>
             `;
             
-            // Auto reload after 3 seconds
             setTimeout(() => {
                 window.location.reload();
             }, 3000);
@@ -255,7 +226,6 @@ function confirmPasswordReset() {
     const confirm = document.getElementById('confirmPassword').value;
     const resultDiv = document.getElementById('passwordResetResult');
     
-    // Validation
     if (!password || !confirm) {
         resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Beide Felder sind erforderlich!</div>';
         return;
@@ -270,8 +240,7 @@ function confirmPasswordReset() {
         resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Passwort muss mindestens 6 Zeichen lang sein!</div>';
         return;
     }
-    
-    // Show loading
+
     resultDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Passwort wird zurückgesetzt...</div>';
     
     fetch(`/api/users/web/${currentUserId}/reset-password`, {
@@ -309,7 +278,6 @@ function regenerateUniquePassword(userId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Show new password in modal
             const alertContent = `
                 <div class="alert alert-success" role="alert">
                     <h4 class="alert-heading"><i class="fas fa-check-circle"></i> Unique Password regeneriert!</h4>
@@ -373,10 +341,6 @@ function deleteWebUser(userId) {
         showToast('Fehler beim Löschen', 'error');
     });
 }
-
-// ================================
-// DISCORD USER MANAGEMENT
-// ================================
 
 function showUserDetails(userId) {
     const contentDiv = document.getElementById('userDetailsContent');
@@ -506,10 +470,6 @@ function verifyUser(userId) {
         showToast('Fehler bei der Verifikation', 'error');
     });
 }
-
-// ================================
-// MODERATION FUNCTIONS
-// ================================
 
 function moderateUser(userId, action) {
     currentUserId = userId;
@@ -758,10 +718,8 @@ function showWebUserLogs(userId) {
 }
 
 function showWebUserSessions(userId) {
-    // Erst alle anderen Modals schließen
     forceModalCleanup();
-    
-    // Show loading state
+
     const loadingContent = `
         <div class="text-center">
             <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
@@ -776,14 +734,13 @@ function showWebUserSessions(userId) {
             action: null
         }
     ]);
-    
-    // Fetch sessions from server
+
     fetch(`/api/users/web/${userId}/sessions`)
         .then(response => response.json())
         .then(data => {
             if (data.error) {
                 showToast(data.error, 'error');
-                forceModalCleanup(); // Cleanup bei Fehler
+                forceModalCleanup();
                 return;
             }
             
@@ -824,8 +781,7 @@ function showWebUserSessions(userId) {
                 </div>
                 ${sessionsList}
             `;
-            
-            // Update existing modal content
+
             showModal('User Sessions', content, [
                 {
                     text: 'Alle anderen Sessions beenden',
@@ -842,7 +798,7 @@ function showWebUserSessions(userId) {
         .catch(error => {
             console.error('Error loading user sessions:', error);
             showToast('Fehler beim Laden der Sessions', 'error');
-            forceModalCleanup(); // Cleanup bei Fehler
+            forceModalCleanup();
         });
 }
 
@@ -869,7 +825,6 @@ function terminateSession(sessionId, userId) {
     .then(data => {
         if (data.success) {
             showToast('Session erfolgreich beendet', 'success');
-            // Refresh session list
             showWebUserSessions(userId);
         } else {
             showToast(data.error || 'Fehler beim Beenden der Session', 'error');
@@ -894,7 +849,6 @@ function terminateAllOtherSessions(userId) {
     .then(data => {
         if (data.success) {
             showToast(`${data.terminated_count} Sessions beendet`, 'success');
-            // Refresh session list
             showWebUserSessions(userId);
         } else {
             showToast(data.error || 'Fehler beim Beenden der Sessions', 'error');
@@ -905,10 +859,6 @@ function terminateAllOtherSessions(userId) {
         showToast('Fehler beim Beenden der Sessions', 'error');
     });
 }
-
-// ================================
-// UTILITY FUNCTIONS
-// ================================
 
 function openDiscordProfile(userId) {
     const discordUrl = `https://discord.com/users/${userId}`;
@@ -1008,16 +958,7 @@ function exportUsers() {
     showToast('Benutzerdaten exportiert!', 'success');
 }
 
-// ================================
-// UI HELPER FUNCTIONS
-// ================================
-
-// ================================
-// MODAL FIX - Ersetzt die showModal Funktion
-// ================================
-
 function showModal(title, content, buttons = []) {
-    // Create dynamic modal if it doesn't exist
     let modal = document.getElementById('dynamicModal');
     if (!modal) {
         modal = document.createElement('div');
@@ -1038,12 +979,10 @@ function showModal(title, content, buttons = []) {
         `;
         document.body.appendChild(modal);
     }
-    
-    // Set content
+
     document.getElementById('dynamicModalTitle').innerHTML = title;
     document.getElementById('dynamicModalBody').innerHTML = content;
-    
-    // Set buttons
+
     const footer = document.getElementById('dynamicModalFooter');
     footer.innerHTML = '';
     
@@ -1060,7 +999,6 @@ function showModal(title, content, buttons = []) {
                 } catch (error) {
                     console.error('Button action error:', error);
                 }
-                // Immer Modal schließen nach Aktion
                 const modalInstance = bootstrap.Modal.getInstance(modal);
                 if (modalInstance) {
                     modalInstance.hide();
@@ -1072,22 +1010,17 @@ function showModal(title, content, buttons = []) {
         
         footer.appendChild(btn);
     });
-    
-    // Cleanup bei Modal-Schließung
+
     modal.addEventListener('hidden.bs.modal', function () {
-        // Entferne alle Modal-Backdrops
         const backdrops = document.querySelectorAll('.modal-backdrop');
         backdrops.forEach(backdrop => backdrop.remove());
-        
-        // Stelle sicher dass body nicht mehr modal-open Klasse hat
+
         document.body.classList.remove('modal-open');
-        
-        // Entferne inline styles vom body
+       
         document.body.style.overflow = '';
         document.body.style.paddingRight = '';
     });
-    
-    // Show modal
+
     const modalInstance = new bootstrap.Modal(modal, {
         backdrop: true,
         keyboard: true
@@ -1096,7 +1029,6 @@ function showModal(title, content, buttons = []) {
 }
 
 function forceModalCleanup() {
-    // Alle Modals schließen
     const modals = document.querySelectorAll('.modal');
     modals.forEach(modal => {
         const modalInstance = bootstrap.Modal.getInstance(modal);
@@ -1104,12 +1036,10 @@ function forceModalCleanup() {
             modalInstance.hide();
         }
     });
-    
-    // Alle Backdrops entfernen
+
     const backdrops = document.querySelectorAll('.modal-backdrop');
     backdrops.forEach(backdrop => backdrop.remove());
-    
-    // Body zurücksetzen
+
     document.body.classList.remove('modal-open');
     document.body.style.overflow = '';
     document.body.style.paddingRight = '';
@@ -1169,24 +1099,17 @@ function getOrCreateToastContainer() {
     return container;
 }
 
-// ================================
-// KEYBOARD SHORTCUTS
-// ================================
-
 function handleKeyboardShortcuts(e) {
-    // Escape um Modals zu schließen UND cleanup zu machen
     if (e.key === 'Escape') {
         e.preventDefault();
         forceModalCleanup();
         return;
     }
     
-    // Restliche Shortcuts nur wenn kein Modal offen ist
     if (document.querySelector('.modal.show')) {
         return;
     }
     
-    // Ctrl/Cmd + F für Suche
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
         const searchInput = document.getElementById('discordSearch');
@@ -1195,28 +1118,21 @@ function handleKeyboardShortcuts(e) {
         }
     }
     
-    // Ctrl/Cmd + N für neuen Benutzer
     if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
         e.preventDefault();
         showCreateWebUserModal();
     }
-    
-    // Ctrl/Cmd + E für Export
+
     if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
         e.preventDefault();
         exportUsers();
     }
-    
-    // Ctrl/Cmd + R für Refresh
+
     if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
         e.preventDefault();
         refreshUserData();
     }
 }
-
-// ================================
-// ERROR HANDLING
-// ================================
 
 function handleApiError(error, context = '') {
     console.error(`API Error ${context}:`, error);
@@ -1235,21 +1151,14 @@ function handleApiError(error, context = '') {
     }
 }
 
-// ================================
-// INITIALIZATION & CLEANUP
-// ================================
-
-// Page initialization
 function initializePage() {
     console.log('14th Squad User Management - Initializing...');
-    
-    // Initialize tooltips
+
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-    
-    // Initialize popovers
+
     const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
     popoverTriggerList.map(function (popoverTriggerEl) {
         return new bootstrap.Popover(popoverTriggerEl);
@@ -1258,23 +1167,16 @@ function initializePage() {
     console.log('14th Squad User Management - Ready!');
 }
 
-// Cleanup on page unload
 window.addEventListener('beforeunload', function() {
     console.log('14th Squad User Management - Cleanup complete');
 });
 
-// Auto-run initialization when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializePage);
 } else {
     initializePage();
 }
 
-// ================================
-// DEBUG HELPERS
-// ================================
-
-// Development helper: Test all toast types
 function testToasts() {
     showToast('Success message', 'success');
     setTimeout(() => showToast('Error message', 'error'), 1000);
@@ -1282,7 +1184,6 @@ function testToasts() {
     setTimeout(() => showToast('Warning message', 'warning'), 3000);
 }
 
-// Development helper: Simulate API calls
 function simulateApiCall(endpoint, method = 'GET', data = null) {
     console.log(`Simulating API call: ${method} ${endpoint}`, data);
     return new Promise(resolve => {
@@ -1292,7 +1193,6 @@ function simulateApiCall(endpoint, method = 'GET', data = null) {
     });
 }
 
-// Make some functions globally available for debugging
 window.SquadUserManagement = {
     testToasts,
     simulateApiCall,

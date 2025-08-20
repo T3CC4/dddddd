@@ -1,19 +1,15 @@
-// Aktuelle Zeit anzeigen und aktualisieren
 function updateTime() {
     const now = new Date();
     document.getElementById('current-time').textContent = now.toLocaleString('de-DE');
 }
 
-// Zeit beim Laden setzen und jede Sekunde aktualisieren
 updateTime();
 setInterval(updateTime, 1000);
 
-// Live Activities JavaScript
 function refreshActivities() {
     const refreshIcon = document.getElementById('refresh-icon');
     const activitiesContainer = document.getElementById('recent-activities');
     
-    // Zeige Loading
     refreshIcon.classList.add('fa-spin');
     
     fetch('/api/dashboard/activities?limit=10')
@@ -92,7 +88,6 @@ function getActivityActions(activity) {
     }
 }
 
-// Activity Actions
 function viewMessage(channelName) {
     window.location.href = `/messages?channel=${encodeURIComponent(channelName)}`;
 }
@@ -109,10 +104,8 @@ function viewWebLogs() {
     window.location.href = '/logs';
 }
 
-// Auto-refresh alle 30 Sekunden
 setInterval(refreshActivities, 30000);
 
-// Toast Notification System
 function showToast(message, type = 'info') {
     const toastContainer = getOrCreateToastContainer();
     const toastId = 'toast-' + Date.now();
@@ -181,11 +174,9 @@ function getOrCreateToastContainer() {
     return container;
 }
 
-// Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Dashboard loaded - Activities ready for live updates');
     
-    // Zeige Willkommensnachricht für neue Anmeldung
     if (sessionStorage.getItem('justLoggedIn')) {
         setTimeout(() => {
             showToast('Willkommen zurück! Dashboard geladen.', 'success');
@@ -194,13 +185,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Page Visibility API - pausiere refresh wenn Tab nicht aktiv
 document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
         console.log('Dashboard Tab ist versteckt - Auto-refresh pausiert');
     } else {
         console.log('Dashboard Tab ist aktiv - Auto-refresh aktiv');
-        // Refresh activities when tab becomes visible again
         refreshActivities();
     }
 });

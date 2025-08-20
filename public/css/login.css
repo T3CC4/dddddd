@@ -1,9 +1,3 @@
-/* ========================================
-   14TH SQUAD - LOGIN CSS
-   Login Page mit einheitlichem Design
-   ======================================== */
-
-/* Login Page Layout - verwendet 14th Squad Variablen */
 .login-page-layout {
     background: var(--primary-bg);
     min-height: 100vh;
@@ -13,7 +7,6 @@
     position: relative;
 }
 
-/* Grid Background wie im Rest der Anwendung */
 .login-page-layout::before {
     content: '';
     position: fixed;
@@ -29,7 +22,6 @@
     z-index: -2;
 }
 
-/* Animated Background Glow */
 .login-page-layout::after {
     content: '';
     position: fixed;
@@ -55,7 +47,6 @@
     }
 }
 
-/* Login Container - 14th Squad Card Style */
 .login-container {
     background: rgba(26, 26, 26, 0.95);
     backdrop-filter: var(--backdrop-blur);
@@ -79,7 +70,6 @@
     opacity: 1;
 }
 
-/* Login Header - 14th Squad Header Style */
 .login-header {
     background: rgba(255, 0, 102, 0.1);
     border-bottom: 1px solid var(--primary-pink);
@@ -106,7 +96,6 @@
     letter-spacing: 0.5px;
 }
 
-/* Discord Icon - 14th Squad Style */
 .discord-icon {
     font-size: var(--font-3xl);
     margin-bottom: var(--spacing-sm);
@@ -120,13 +109,11 @@
     100% { text-shadow: 0 0 25px var(--glow-pink), 0 0 35px var(--primary-pink); }
 }
 
-/* Login Body */
 .login-body {
     padding: var(--spacing-xl);
     background: var(--secondary-bg);
 }
 
-/* Form Controls - 14th Squad Style */
 .form-control {
     background: var(--accent-bg);
     border: 1px solid var(--border-color);
@@ -150,7 +137,6 @@
     opacity: 1;
 }
 
-/* Form Labels - 14th Squad Style */
 .form-label {
     font-weight: 500;
     color: var(--text-secondary);
@@ -165,7 +151,6 @@
     color: var(--primary-pink);
 }
 
-/* Login Button - 14th Squad Squad Button Style */
 .btn-login {
     background: linear-gradient(45deg, var(--primary-pink), var(--secondary-pink));
     border: none;
@@ -215,7 +200,6 @@
     transform: translateY(0);
 }
 
-/* Alerts - 14th Squad Style */
 .alert {
     border-radius: var(--border-radius);
     border: none;
@@ -238,7 +222,6 @@
     color: var(--primary-pink);
 }
 
-/* Unique Password Info - 14th Squad Info Style */
 .unique-password-info {
     background: rgba(255, 170, 0, 0.1);
     border-radius: var(--border-radius);
@@ -267,30 +250,28 @@
     font-size: var(--font-xs);
 }
 
-/* Form Groups */
 .mb-3 {
     margin-bottom: var(--spacing-md);
 }
 
-/* Responsive Design */
 @media (max-width: 768px) {
     .login-container {
         margin: var(--spacing-md);
         max-width: none;
     }
-    
+
     .login-header {
         padding: var(--spacing-lg);
     }
-    
+
     .login-body {
         padding: var(--spacing-lg);
     }
-    
+
     .discord-icon {
         font-size: var(--font-2xl);
     }
-    
+
     .login-header h3 {
         font-size: var(--font-xl);
     }
@@ -300,19 +281,19 @@
     .login-container {
         margin: var(--spacing-sm);
     }
-    
+
     .login-header {
         padding: var(--spacing-md);
     }
-    
+
     .login-body {
         padding: var(--spacing-md);
     }
-    
+
     .form-control {
         padding: var(--spacing-sm);
     }
-    
+
     .btn-login {
         padding: var(--spacing-sm);
     }

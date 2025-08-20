@@ -9,23 +9,20 @@ const expressLayouts = require('express-ejs-layouts');
 const app = express();
 const db = new sqlite3.Database('./bot_database.sqlite');
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// Layout Setup
 app.use(expressLayouts);
 app.set('layout', 'layout');
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Session Setup
 app.use(session({
     secret: 'your-secret-key-change-this-14th-squad',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 Stunden
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }
 }));
 
 app.use((req, res, next) => {
@@ -34,7 +31,6 @@ app.use((req, res, next) => {
         const sessionId = req.sessionID;
         const userAgent = req.headers['user-agent'] || 'Unknown';
         
-        // Bestimme Device-Typ basierend auf User-Agent
         let deviceType = 'Desktop';
         if (/Mobile|Android|iPhone|iPad/.test(userAgent)) {
             if (/iPad/.test(userAgent)) {
@@ -44,9 +40,8 @@ app.use((req, res, next) => {
             }
         }
         
-        const expiresAt = new Date(Date.now() + (24 * 60 * 60 * 1000)); // 24 Stunden
-        
-        // Upsert Session
+        const expiresAt = new Date(Date.now() + (24 * 60 * 60 * 1000));
+
         db.run(`
             INSERT OR REPLACE INTO user_sessions 
             (session_id, user_id, device_type, last_activity, expires_at) 
@@ -57,7 +52,6 @@ app.use((req, res, next) => {
             }
         });
         
-        // Cleanup abgelaufene Sessions (alle 100 Requests)
         if (Math.random() < 0.01) {
             db.run(`DELETE FROM user_sessions WHERE expires_at < datetime('now')`, (err) => {
                 if (err) {
@@ -70,7 +64,6 @@ app.use((req, res, next) => {
     next();
 });
 
-// Middleware für Authentication
 const requireAuth = (requiredRole = 'mod') => {
     return (req, res, next) => {
         if (!req.session.user) {
@@ -88,14 +81,12 @@ const requireAuth = (requiredRole = 'mod') => {
     };
 };
 
-// Hilfsfunktion für Web Logs (OHNE IP-Adresse aus Sicherheitsgründen)
 function logWebAction(userId, action, details) {
     db.run(`INSERT INTO web_logs (user_id, action, details, timestamp) VALUES (?, ?, ?, ?)`,
         [userId, action, details, new Date().toISOString()]
     );
 }
 
-// Bot-Server Kommunikationsfunktionen
 function sendCommandToBot(commandType, targetId, parameters = null) {
     return new Promise((resolve, reject) => {
         const parametersJson = parameters ? JSON.stringify(parameters) : null;
@@ -169,11 +160,6 @@ function getTimeAgo(timestamp) {
     }
 }
 
-// ===================
-// HAUPTROUTEN
-// ===================
-
-// Root Redirect
 app.get('/', (req, res) => {
     if (req.session.user) {
         res.redirect('/dashboard');
@@ -182,7 +168,6 @@ app.get('/', (req, res) => {
     }
 });
 
-// Login Seite
 app.get('/login', (req, res) => {
     if (req.session.user) {
         return res.redirect('/dashboard');
@@ -193,7 +178,6 @@ app.get('/login', (req, res) => {
     });
 });
 
-// Login POST
 app.post('/login', (req, res) => {
     const { username, password, uniquePassword } = req.body;
     
@@ -223,7 +207,6 @@ app.post('/login', (req, res) => {
                     role: user.role
                 };
                 
-                // Update last login
                 db.run(`UPDATE web_users SET last_login = ? WHERE id = ?`, 
                     [new Date().toISOString(), user.id]);
                 
@@ -246,7 +229,6 @@ app.post('/login', (req, res) => {
     });
 });
 
-// Logout
 app.get('/logout', (req, res) => {
     if (req.session.user) {
         logWebAction(req.session.user.id, 'LOGOUT', 'Benutzer hat sich abgemeldet');
@@ -259,9 +241,7 @@ app.get('/logout', (req, res) => {
     });
 });
 
-// Dashboard
 app.get('/dashboard', requireAuth(), (req, res) => {
-    // Statistiken abrufen
     db.all(`
         SELECT 
             (SELECT COUNT(*) FROM message_logs) as total_messages,
@@ -284,7 +264,6 @@ app.get('/dashboard', requireAuth(), (req, res) => {
             total_web_users: 0
         };
         
-        // Aktivitäten Query
         const activitiesQuery = `
             SELECT 
                 'message' as type,
@@ -387,7 +366,6 @@ app.get('/dashboard', requireAuth(), (req, res) => {
                 activities = [];
             }
             
-            // Aktivitäten verarbeiten und formatieren
             const formattedActivities = (activities || []).map(activity => {
                 const timeAgo = getTimeAgo(activity.timestamp);
                 
@@ -443,7 +421,6 @@ app.get('/dashboard', requireAuth(), (req, res) => {
     });
 });
 
-// Message Logs
 app.get('/messages', requireAuth(), (req, res) => {
     const search = req.query.search || '';
     const channel = req.query.channel || '';
@@ -478,7 +455,6 @@ app.get('/messages', requireAuth(), (req, res) => {
             messages = [];
         }
         
-        // Ergänze fehlende Avatar-Daten
         const enhancedMessages = messages.map(msg => ({
             ...msg,
             username: msg.real_username || msg.username || 'Unbekannt',
@@ -486,7 +462,6 @@ app.get('/messages', requireAuth(), (req, res) => {
             discriminator: msg.discriminator || null
         }));
         
-        // Get total count for pagination
         let countQuery = `SELECT COUNT(*) as count FROM message_logs WHERE 1=1`;
         let countParams = [];
         
@@ -526,7 +501,6 @@ app.get('/messages', requireAuth(), (req, res) => {
     });
 });
 
-// Ticket Management
 app.get('/tickets', requireAuth(), (req, res) => {
     db.all(`
         SELECT t.*, u.username 
@@ -549,7 +523,6 @@ app.get('/tickets', requireAuth(), (req, res) => {
     });
 });
 
-// Einzelnes Ticket anzeigen
 app.get('/tickets/:ticketId', requireAuth(), (req, res) => {
     const ticketId = req.params.ticketId;
     
@@ -566,7 +539,6 @@ app.get('/tickets/:ticketId', requireAuth(), (req, res) => {
             });
         }
         
-        // Lade Nachrichten mit User-Informationen
         db.all(`
             SELECT ml.*, u.username as real_username, u.avatar_hash, u.discriminator
             FROM message_logs ml
@@ -579,7 +551,6 @@ app.get('/tickets/:ticketId', requireAuth(), (req, res) => {
                 messages = [];
             }
             
-            // Falls keine Nachrichten in message_logs, versuche transcript
             if (messages.length === 0 && ticket.transcript) {
                 try {
                     const transcriptMessages = JSON.parse(ticket.transcript);
@@ -596,7 +567,6 @@ app.get('/tickets/:ticketId', requireAuth(), (req, res) => {
                 }
             }
             
-            // Ergänze fehlende Avatar-Daten und Username
             const enhancedMessages = messages.map(msg => ({
                 ...msg,
                 username: msg.real_username || msg.username || 'Unbekannt',
@@ -619,9 +589,7 @@ app.get('/tickets/:ticketId', requireAuth(), (req, res) => {
     });
 });
 
-// User Management (nur Admin)
 app.get('/users', requireAuth('admin'), (req, res) => {
-    // Lade Discord-Benutzer mit Avatar-Daten
     const discordQuery = `
         SELECT 
             u.*,
@@ -637,7 +605,6 @@ app.get('/users', requireAuth('admin'), (req, res) => {
             console.error('❌ Discord users query error:', err);
             console.error('Query was:', discordQuery);
             
-            // Fallback: Versuche einfache Query
             db.all('SELECT * FROM users ORDER BY joined_at DESC', (fallbackErr, fallbackUsers) => {
                 if (fallbackErr) {
                     console.error('❌ Fallback query also failed:', fallbackErr);
@@ -659,7 +626,6 @@ app.get('/users', requireAuth('admin'), (req, res) => {
         }
         
         function continueWithWebUsers() {
-            // Lade Web-Benutzer
             db.all(`SELECT * FROM web_users ORDER BY created_at DESC`, (err, webUsers) => {
                 if (err) {
                     console.error('❌ Web users query error:', err);
@@ -687,7 +653,6 @@ app.get('/users', requireAuth('admin'), (req, res) => {
 
 app.post('/admin/sync-avatars', requireAuth('admin'), async (req, res) => {
     try {
-        // Importiere Bot-Funktionen (falls verfügbar)
         const { syncAllAvatarsCommand } = require('./bot.js');
         
         if (syncAllAvatarsCommand) {
@@ -837,7 +802,6 @@ app.get('/admin/system-status', requireAuth('admin'), (req, res) => {
 app.get('/admin/test-avatar/:userId', requireAuth('admin'), (req, res) => {
     const userId = req.params.userId;
     
-    // Teste verschiedene Avatar-URLs
     const testUrls = {
         default_old: `https://cdn.discordapp.com/embed/avatars/${parseInt(userId) % 5}.png`,
         default_new: `https://cdn.discordapp.com/embed/avatars/${Number((BigInt(userId) >> 22n) % 6n)}.png`,
@@ -918,7 +882,6 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Neuen Web-Benutzer erstellen (nur Admin)
 app.post('/users/web/create', requireAuth('admin'), async (req, res) => {
     const { username, password, role } = req.body;
     
@@ -969,11 +932,9 @@ app.post('/users/web/create', requireAuth('admin'), async (req, res) => {
     }
 });
 
-// Importiere API-Routen
 const apiRoutes = require('./api');
 app.use('/api', apiRoutes);
 
-// Error Handling
 app.use('/api/*', (req, res) => {
     res.status(404).json({ 
         error: 'API-Endpunkt nicht gefunden',
@@ -1010,7 +971,6 @@ app.use((req, res) => {
     }
 });
 
-// Graceful Shutdown Handler
 process.on('SIGINT', () => {
     console.log('\n🛑 Shutdown-Signal empfangen...');
     
@@ -1049,7 +1009,6 @@ process.on('uncaughtException', (error) => {
     });
 });
 
-// Server starten
 const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, () => {
@@ -1073,7 +1032,6 @@ server.on('error', (err) => {
     process.exit(1);
 });
 
-// Exportiere Funktionen für API
 module.exports = { 
     app, 
     db, 

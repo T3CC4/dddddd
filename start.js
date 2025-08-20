@@ -4,7 +4,6 @@ const fs = require('fs');
 
 console.log('🚀 Discord Bot Management System wird gestartet...\n');
 
-// Überprüfe ob config.js existiert
 if (!fs.existsSync('./config.js')) {
     console.error('❌ config.js nicht gefunden!');
     console.log('📋 Bitte führe zuerst das Setup aus:');
@@ -12,33 +11,30 @@ if (!fs.existsSync('./config.js')) {
     process.exit(1);
 }
 
-// Lade Konfiguration
 try {
     const CONFIG = require('./config.js');
-    
-    // Validiere wichtige Konfigurationen
+
     if (!CONFIG.BOT_TOKEN || CONFIG.BOT_TOKEN.includes('DEIN_BOT_TOKEN')) {
         console.error('❌ Bot Token nicht konfiguriert!');
         console.log('📝 Bitte bearbeite config.js und trage deinen Bot Token ein.');
         process.exit(1);
     }
-    
+
     if (!CONFIG.CLIENT_ID || CONFIG.CLIENT_ID.includes('DEINE_CLIENT_ID')) {
         console.error('❌ Client ID nicht konfiguriert!');
         console.log('📝 Bitte bearbeite config.js und trage deine Client ID ein.');
         process.exit(1);
     }
-    
+
     console.log('✅ Konfiguration geladen');
     console.log(`📡 Bot wird auf Server ${CONFIG.GUILD_ID} gestartet`);
     console.log(`🌐 Web-Interface läuft auf Port ${CONFIG.WEB_PORT || 3000}\n`);
-    
+
 } catch (error) {
     console.error('❌ Fehler beim Laden der Konfiguration:', error.message);
     process.exit(1);
 }
 
-// Überprüfe ob node_modules existiert
 if (!fs.existsSync('./node_modules')) {
     console.error('❌ node_modules nicht gefunden!');
     console.log('📦 Bitte installiere zuerst die Abhängigkeiten:');
@@ -46,11 +42,9 @@ if (!fs.existsSync('./node_modules')) {
     process.exit(1);
 }
 
-// Starte Bot und Web-Server
 const botProcess = spawn('node', ['bot.js'], { stdio: 'pipe' });
 const webProcess = spawn('node', ['server.js'], { stdio: 'pipe' });
 
-// Bot Ausgaben
 botProcess.stdout.on('data', (data) => {
     const output = data.toString().trim();
     if (output) {
@@ -65,7 +59,6 @@ botProcess.stderr.on('data', (data) => {
     }
 });
 
-// Web-Server Ausgaben
 webProcess.stdout.on('data', (data) => {
     const output = data.toString().trim();
     if (output) {
@@ -80,7 +73,6 @@ webProcess.stderr.on('data', (data) => {
     }
 });
 
-// Process Event Handlers
 botProcess.on('close', (code) => {
     console.log(`🤖 Bot-Prozess beendet mit Code ${code}`);
     if (code !== 0) {
@@ -95,13 +87,12 @@ webProcess.on('close', (code) => {
     }
 });
 
-// Graceful Shutdown
 process.on('SIGINT', () => {
     console.log('\n🛑 Shutdown-Signal empfangen. Beende Prozesse...');
-    
+
     botProcess.kill('SIGTERM');
     webProcess.kill('SIGTERM');
-    
+
     setTimeout(() => {
         console.log('✅ Alle Prozesse beendet. Auf Wiedersehen!');
         process.exit(0);
@@ -115,7 +106,6 @@ process.on('SIGTERM', () => {
     process.exit(0);
 });
 
-// Unhandled Rejections
 process.on('unhandledRejection', (reason, promise) => {
     console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });

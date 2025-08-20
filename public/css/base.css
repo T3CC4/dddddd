@@ -1,27 +1,19 @@
-/* ========================================
-   14TH SQUAD - BASE CSS
-   Grundlegende Variablen und Styles
-   ======================================== */
-
-/* CSS Custom Properties */
 :root {
-    /* Brand Colors */
+
     --primary-bg: #0a0a0a;
     --secondary-bg: #111111;
     --accent-bg: #1a1a1a;
     --border-color: #333333;
-    
+
     --primary-pink: #ff0066;
     --secondary-pink: #cc0052;
     --accent-pink: #ff3385;
     --glow-pink: rgba(255, 0, 102, 0.3);
-    
-    /* Text Colors */
+
     --text-primary: #ffffff;
     --text-secondary: #cccccc;
     --text-muted: #888888;
-    
-    /* Status Colors */
+
     --success-color: #00ff88;
     --success-glow: rgba(0, 255, 136, 0.3);
     --warning-color: #ffaa00;
@@ -30,38 +22,32 @@
     --danger-glow: rgba(255, 68, 68, 0.3);
     --info-color: #00aaff;
     --info-glow: rgba(0, 170, 255, 0.3);
-    
-    /* Special Effects */
+
     --grid-color: rgba(255, 0, 102, 0.1);
     --backdrop-blur: blur(10px);
     --box-shadow-normal: 0 8px 32px rgba(0, 0, 0, 0.4);
     --box-shadow-hover: 0 12px 48px var(--glow-pink);
-    
-    /* Spacing */
+
     --spacing-xs: 0.25rem;
     --spacing-sm: 0.5rem;
     --spacing-md: 1rem;
     --spacing-lg: 1.5rem;
     --spacing-xl: 2rem;
     --spacing-xxl: 3rem;
-    
-    /* Border Radius */
+
     --border-radius-sm: 4px;
     --border-radius: 8px;
     --border-radius-lg: 12px;
     --border-radius-xl: 16px;
-    
-    /* Transitions */
+
     --transition-fast: 0.15s ease;
     --transition-normal: 0.3s ease;
     --transition-slow: 0.5s ease;
-    
-    /* Font Families */
+
     --font-primary: 'Exo 2', sans-serif;
     --font-heading: 'Orbitron', monospace;
     --font-mono: 'Orbitron', monospace;
-    
-    /* Font Sizes */
+
     --font-xs: 0.75rem;
     --font-sm: 0.875rem;
     --font-base: 1rem;
@@ -69,8 +55,7 @@
     --font-xl: 1.25rem;
     --font-2xl: 1.5rem;
     --font-3xl: 2rem;
-    
-    /* Z-Index Layers */
+
     --z-dropdown: 1000;
     --z-sticky: 1020;
     --z-fixed: 1030;
@@ -81,7 +66,6 @@
     --z-toast: 9999;
 }
 
-/* Reset & Base Styles */
 * {
     box-sizing: border-box;
 }
@@ -111,7 +95,6 @@ body {
     position: relative;
 }
 
-/* Futuristic Grid Background */
 body::before {
     content: '';
     position: fixed;
@@ -127,7 +110,6 @@ body::before {
     z-index: -2;
 }
 
-/* Animated Background Glow */
 body::after {
     content: '';
     position: fixed;
@@ -153,7 +135,6 @@ body::after {
     }
 }
 
-/* Typography */
 h1, h2, h3, h4, h5, h6 {
     margin-top: 0;
     margin-bottom: var(--spacing-sm);
@@ -195,7 +176,6 @@ code {
     border-radius: var(--border-radius-sm);
 }
 
-/* Selection */
 ::selection {
     background: var(--glow-pink);
     color: var(--text-primary);
@@ -206,7 +186,6 @@ code {
     color: var(--text-primary);
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar {
     width: 8px;
 }
@@ -224,13 +203,11 @@ code {
     background: var(--accent-pink);
 }
 
-/* Focus Styles */
 :focus {
     outline: 2px solid var(--primary-pink);
     outline-offset: 2px;
 }
 
-/* Utility Classes */
 .text-primary { color: var(--text-primary) !important; }
 .text-secondary { color: var(--text-secondary) !important; }
 .text-muted { color: var(--text-muted) !important; }
@@ -259,7 +236,6 @@ code {
 .shadow-normal { box-shadow: var(--box-shadow-normal) !important; }
 .shadow-hover { box-shadow: var(--box-shadow-hover) !important; }
 
-/* Responsive Breakpoints Helper */
 .d-mobile-none { display: block; }
 .d-mobile-block { display: none; }
 
@@ -268,7 +244,6 @@ code {
     .d-mobile-block { display: block; }
 }
 
-/* Loading Animations */
 .loading {
     opacity: 0.6;
     pointer-events: none;
@@ -307,7 +282,6 @@ code {
     }
 }
 
-/* Accessibility */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -317,19 +291,18 @@ code {
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
-    
+
     .glow-text {
         animation: none;
         text-shadow: 0 0 5px var(--glow-pink);
     }
-    
+
     body::after {
         animation: none;
         opacity: 0.2;
     }
 }
 
-/* High Contrast Mode */
 @media (prefers-contrast: high) {
     :root {
         --primary-pink: #ff0080;
@@ -338,17 +311,16 @@ code {
     }
 }
 
-/* Print Styles */
 @media print {
     body::before,
     body::after {
         display: none;
     }
-    
+
     .glow-text {
         text-shadow: none;
     }
-    
+
     * {
         box-shadow: none !important;
         text-shadow: none !important;

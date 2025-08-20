@@ -77,12 +77,10 @@ function showMessageDetails(messageId) {
 }
 
 function jumpToMessage(messageId, channelId) {
-    // Discord Deep Link
     const guildId = '<%= typeof CONFIG !== "undefined" ? CONFIG.GUILD_ID : "1406183789964562432" %>';
     const discordUrl = `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
     window.open(discordUrl, '_blank');
     
-    // Toast Notification
     showToast('Discord wird geöffnet...', 'info');
 }
 
@@ -131,7 +129,6 @@ function fallbackCopyTextToClipboard(text) {
     document.body.removeChild(textArea);
 }
 
-// Export Messages
 function exportMessages() {
     const messages = document.querySelectorAll('.discord-message');
     let csv = 'Zeitstempel,Benutzer,Channel,Nachricht,Status,Message ID\n';
@@ -143,8 +140,7 @@ function exportMessages() {
             csv += `"${messageData.timestamp}","${messageData.author}","${messageData.channel}","${escapedContent}","${messageData.status}","${messageData.messageId}"\n`;
         }
     });
-    
-    // Download CSV
+  
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -184,7 +180,6 @@ function extractMessageData(messageElement) {
     };
 }
 
-// Toast Notifications
 function showToast(message, type = 'info') {
     const toastContainer = getOrCreateToastContainer();
     const toastId = 'toast-' + Date.now();
@@ -217,7 +212,6 @@ function showToast(message, type = 'info') {
     
     toastContainer.insertAdjacentHTML('beforeend', toastHtml);
     
-    // Auto-remove nach 4 Sekunden
     setTimeout(() => {
         removeToast(toastId);
     }, 4000);
@@ -256,7 +250,6 @@ function getOrCreateToastContainer() {
     return container;
 }
 
-// Real-time search
 let searchTimeout;
 document.getElementById('search').addEventListener('input', function() {
     clearTimeout(searchTimeout);
@@ -264,11 +257,9 @@ document.getElementById('search').addEventListener('input', function() {
     
     if (query.length >= 2) {
         searchTimeout = setTimeout(() => {
-            // Highlight existing messages
             highlightSearchTerms(query);
         }, 300);
     } else {
-        // Remove highlights
         removeAllHighlights();
     }
 });
@@ -294,59 +285,40 @@ function removeAllHighlights() {
     });
 }
 
-// Scroll to bottom functionality
 function scrollToBottom() {
     const container = document.getElementById('messagesContainer');
     container.scrollTop = container.scrollHeight;
 }
 
-// Auto-scroll on new messages (falls implementiert)
 const observer = new MutationObserver(function(mutations) {
     mutations.forEach(function(mutation) {
         if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-            // Optional: Auto-scroll to new messages
-            // scrollToBottom();
+
         }
     });
 });
 
-// Keyboard shortcuts
 document.addEventListener('keydown', function(e) {
-    // Ctrl/Cmd + F für Suche
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
         document.getElementById('search').focus();
     }
-    
-    // Escape um Suche zu leeren
+
     if (e.key === 'Escape') {
         const searchInput = document.getElementById('search');
         if (searchInput.value) {
             searchInput.value = '';
             removeAllHighlights();
-            // Optional: Reload page to clear search
-            // window.location.href = '/messages';
         }
     }
-    
-    // Ctrl/Cmd + E für Export
     if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
         e.preventDefault();
         exportMessages();
     }
 });
 
-// Initialize
 document.addEventListener('DOMContentLoaded', function() {
-    // Lade Message Count
     updateMessageCount();
-    
-    // Auto-refresh alle 30 Sekunden (optional)
-    // setInterval(() => {
-    //     if (!document.hidden) {
-    //         location.reload();
-    //     }
-    // }, 30000);
 });
 
 function updateMessageCount() {
@@ -357,7 +329,6 @@ function updateMessageCount() {
     }
 }
 
-// Lazy loading für Avatar-Bilder
 function setupLazyLoading() {
     const avatars = document.querySelectorAll('.user-avatar');
     
@@ -377,7 +348,6 @@ function setupLazyLoading() {
     });
 }
 
-// CSS für Toast Notifications
 const toastStyles = `
 .discord-toast {
     border-radius: 8px;
@@ -400,7 +370,6 @@ const toastStyles = `
 }
 `;
 
-// Füge Toast Styles zum Head hinzu
 const styleSheet = document.createElement('style');
 styleSheet.textContent = toastStyles;
 document.head.appendChild(styleSheet);

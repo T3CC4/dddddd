@@ -1,16 +1,9 @@
-/* ========================================
-   14TH SQUAD - USERS CSS
-   Users-spezifische Styles (Duplikate entfernt)
-   ======================================== */
-
-/* Role Badge - User Management spezifisch */
 .role-badge {
     font-family: var(--font-heading);
     font-weight: 600;
     letter-spacing: 0.5px;
 }
 
-/* Unique Password - User Management spezifisch */
 .unique-password-container {
     display: flex;
     align-items: center;
@@ -34,7 +27,6 @@
     box-shadow: 0 0 8px var(--glow-pink);
 }
 
-/* Login Info - User Management spezifisch */
 .login-info {
     font-size: 0.8rem;
 }
@@ -44,13 +36,11 @@
     margin-bottom: 0.25rem;
 }
 
-/* Join Date - User spezifisch */
 .join-date {
     font-weight: 500;
     color: var(--text-primary);
 }
 
-/* Navigation Tabs - User Management Override */
 .nav-tabs .nav-link {
     color: var(--text-secondary);
     background-color: transparent;
@@ -70,7 +60,6 @@
     background-color: rgba(255, 0, 102, 0.05);
 }
 
-/* Stats Cards - User Management spezifisch */
 .card .card-title {
     font-size: 2rem;
     margin-bottom: 0;
@@ -81,14 +70,12 @@
     font-size: 0.9rem;
 }
 
-/* Form Enhancements - User Forms spezifisch */
 .form-text {
     color: var(--text-muted);
     font-size: 0.8rem;
     margin-top: var(--spacing-xs);
 }
 
-/* User Filter Row Animations - spezifische Implementation */
 .discord-user-row,
 .web-user-row {
     transition: opacity var(--transition-normal), transform var(--transition-normal);
@@ -100,16 +87,15 @@
     transform: translateX(-10px);
 }
 
-/* Mobile Responsive - User Management spezifisch */
 @media (max-width: 768px) {
     .nav-tabs {
         flex-direction: column;
     }
-    
+
     .nav-tabs .nav-item {
         width: 100%;
     }
-    
+
     .nav-tabs .nav-link {
         text-align: center;
         border-radius: var(--border-radius-sm);

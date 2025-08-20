@@ -1,4 +1,3 @@
-// Filter Funktionen
 function filterLogs() {
     const actionFilter = document.getElementById('actionFilter').value;
     const userFilter = document.getElementById('userFilter').value;
@@ -25,7 +24,6 @@ function filterLogs() {
     
     document.getElementById('logCount').textContent = visibleCount;
     
-    // Update pagination info
     const totalVisible = visibleCount;
     const pagination = document.querySelector('.pagination');
     if (pagination && totalVisible === 0) {
@@ -35,7 +33,6 @@ function filterLogs() {
     }
 }
 
-// Export Logs
 function exportLogs() {
     const rows = document.querySelectorAll('.log-row');
     let csv = 'Zeitstempel,Benutzer,Aktion,Details\n';
@@ -52,7 +49,6 @@ function exportLogs() {
         }
     });
     
-    // Download CSV
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -64,21 +60,18 @@ function exportLogs() {
     document.body.removeChild(link);
 }
 
-// Real-time Filter
 let filterTimeout;
 document.getElementById('logSearch').addEventListener('input', function() {
     clearTimeout(filterTimeout);
     filterTimeout = setTimeout(filterLogs, 300);
 });
 
-// Auto-refresh alle 60 Sekunden
 setTimeout(() => {
     if (!document.hidden) {
         location.reload();
     }
 }, 60000);
 
-// Page Visibility API - pausiere refresh wenn Tab nicht aktiv
 document.addEventListener('visibilitychange', function() {
     if (document.hidden) {
         console.log('Tab ist versteckt - Auto-refresh pausiert');
@@ -87,9 +80,7 @@ document.addEventListener('visibilitychange', function() {
     }
 });
 
-// Initialize filters
 document.addEventListener('DOMContentLoaded', function() {
-    // Load filter states from localStorage
     const savedActionFilter = localStorage.getItem('logs_action_filter');
     const savedUserFilter = localStorage.getItem('logs_user_filter');
     const savedSearchTerm = localStorage.getItem('logs_search_term');
@@ -104,12 +95,10 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('logSearch').value = savedSearchTerm;
     }
     
-    // Apply filters if any were saved
     if (savedActionFilter || savedUserFilter || savedSearchTerm) {
         filterLogs();
     }
     
-    // Save filter states on change
     document.getElementById('actionFilter').addEventListener('change', function() {
         localStorage.setItem('logs_action_filter', this.value);
     });
@@ -123,15 +112,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Keyboard Shortcuts
 document.addEventListener('keydown', function(e) {
-    // Ctrl/Cmd + F für Suche
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
         document.getElementById('logSearch').focus();
     }
     
-    // Escape um Filter zu löschen
     if (e.key === 'Escape') {
         document.getElementById('actionFilter').value = '';
         document.getElementById('userFilter').value = '';
@@ -142,7 +128,6 @@ document.addEventListener('keydown', function(e) {
         filterLogs();
     }
     
-    // Ctrl/Cmd + E für Export
     if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
         e.preventDefault();
         exportLogs();

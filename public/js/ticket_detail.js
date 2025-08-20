@@ -1,29 +1,21 @@
-// Ticket Detail JavaScript - Vollständig implementiert ohne Template-Code
 let currentTicketId = null;
 let ticketData = null;
 
-// Initialisierung beim Laden der Seite
 document.addEventListener('DOMContentLoaded', function() {
-    // Extrahiere Ticket ID aus der URL
     const pathParts = window.location.pathname.split('/');
     currentTicketId = pathParts[pathParts.length - 1];
     
     console.log('Ticket Detail geladen für:', currentTicketId);
-    
-    // Lade Ticket-Daten
+
     loadTicketData();
-    
-    // Scroll zum Ende der Nachrichten
+
     scrollToBottomOfMessages();
-    
-    // Initialize tooltips
+
     initializeTooltips();
-    
-    // Starte Auto-refresh für offene Tickets
+
     startAutoRefresh();
 });
 
-// Lade Ticket-Daten über API
 async function loadTicketData() {
     try {
         const response = await fetch(`/api/tickets/${currentTicketId}/details`);
@@ -39,8 +31,7 @@ async function loadTicketData() {
     } catch (error) {
         console.log('Netzwerkfehler beim Laden der Ticket-Daten:', error);
     }
-    
-    // Fallback: Extrahiere Daten aus der Seite
+
     ticketData = extractTicketDataFromPage();
 }
 
@@ -151,8 +142,7 @@ function downloadTranscript() {
         showToast('Ticket ID nicht gefunden', 'error');
         return;
     }
-    
-    // Versuche zuerst den API-Endpunkt
+
     const downloadUrl = `/api/tickets/${currentTicketId}/transcript`;
     
     fetch(downloadUrl)
@@ -164,7 +154,6 @@ function downloadTranscript() {
             }
         })
         .then(blob => {
-            // Download über API erfolgreich
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -179,7 +168,6 @@ function downloadTranscript() {
             showToast('Transcript-Download gestartet', 'success');
         })
         .catch(error => {
-            // Fallback: Generiere Transcript aus Seite
             console.log('API Download fehlgeschlagen, verwende Fallback:', error);
             generateTranscriptFromPage();
         });
@@ -227,7 +215,6 @@ function generateTranscriptFromPage() {
     content += `Transcript erstellt: ${new Date().toLocaleString('de-DE')}\n`;
     content += `14th Squad Management System v1.1\n`;
     
-    // Download als Datei
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -248,8 +235,7 @@ function exportTicketData() {
         showToast('Ticket ID nicht gefunden', 'error');
         return;
     }
-    
-    // Sammle alle verfügbaren Ticket-Daten
+
     const ticketInfo = getTicketInfoFromPage();
     const messages = getTranscriptFromPage();
     
@@ -272,8 +258,7 @@ function exportTicketData() {
             system_version: '14th Squad Management v1.1'
         }
     };
-    
-    // Erstelle Download
+
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { 
         type: 'application/json;charset=utf-8;' 
     });
@@ -292,22 +277,17 @@ function exportTicketData() {
     showToast('Ticket-Daten erfolgreich exportiert!', 'success');
 }
 
-// Hilfsfunktionen
-
 function extractTicketDataFromPage() {
     const data = {};
     
     try {
-        // Ticket ID aus URL
         data.ticket_id = currentTicketId;
-        
-        // Status aus Badge
+
         const statusBadge = document.querySelector('.badge');
         if (statusBadge) {
             data.status = statusBadge.textContent.includes('Offen') ? 'open' : 'closed';
         }
-        
-        // Weitere Daten aus der Info-Tabelle
+
         const infoTable = document.querySelector('.card-body table');
         if (infoTable) {
             const rows = infoTable.querySelectorAll('tr');
@@ -319,15 +299,13 @@ function extractTicketDataFromPage() {
                     
                     switch(key) {
                         case 'Benutzer':
-                            // Extrahiere User ID aus dem Text
                             const idMatch = value.match(/ID:\s*(\S+)/);
                             if (idMatch) {
                                 data.user_id = idMatch[1];
                             }
-                            // Extrahiere Username (vor "ID:")
                             const usernameMatch = value.split('ID:')[0].trim();
                             if (usernameMatch) {
-                                data.username = usernameMatch.replace(/^\S+\s+/, ''); // Entferne Icon
+                                data.username = usernameMatch.replace(/^\S+\s+/, '');
                             }
                             break;
                         case 'Channel ID':
@@ -385,8 +363,7 @@ function getTranscriptFromPage() {
 
 function getTicketInfoFromPage() {
     const info = {};
-    
-    // Extrahiere Informationen aus der Tabelle
+
     const infoTable = document.querySelector('.card-body table');
     if (infoTable) {
         const rows = infoTable.querySelectorAll('tr');
@@ -442,14 +419,12 @@ function getMessageStatistics(messages) {
 
 function parseTimestamp(timestampStr) {
     try {
-        // Deutscher Format: "31.12.2023, 23:59:59"
         if (timestampStr.includes(',')) {
             const [datePart, timePart] = timestampStr.split(', ');
             const [day, month, year] = datePart.split('.');
             return new Date(`${year}-${month}-${day}T${timePart}`).toISOString();
         }
-        
-        // Fallback: versuche direktes Parsing
+
         return new Date(timestampStr).toISOString();
     } catch (error) {
         console.warn('Konnte Timestamp nicht parsen:', timestampStr);
@@ -469,7 +444,7 @@ function calculateDuration(startStr, endStr) {
     try {
         const start = new Date(startStr);
         const end = new Date(endStr);
-        return Math.round((end - start) / (1000 * 60)); // Minuten
+        return Math.round((end - start) / (1000 * 60));
     } catch (error) {
         return null;
     }
@@ -480,11 +455,9 @@ function getAvatarInitial(username) {
 }
 
 function getCurrentUsername() {
-    // Versuche den aktuellen Benutzernamen aus der Navigation zu extrahieren
     const userElement = document.querySelector('.navbar .dropdown-toggle');
     if (userElement) {
         const text = userElement.textContent;
-        // Extrahiere Namen vor dem Badge
         const parts = text.trim().split(/\s+/);
         return parts[0] || 'Unbekannt';
     }
@@ -499,7 +472,6 @@ function scrollToBottomOfMessages() {
 }
 
 function initializeTooltips() {
-    // Initialize Bootstrap tooltips if available
     if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
         const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
         tooltipTriggerList.map(function (tooltipTriggerEl) {
@@ -519,9 +491,7 @@ function escapeHtml(text) {
     return text.replace(/[&<>"']/g, function(m) { return map[m]; });
 }
 
-// Auto-refresh für offene Tickets (alle 30 Sekunden)
 function startAutoRefresh() {
-    // Prüfe erst nach dem Laden der Ticket-Daten
     setTimeout(() => {
         const isOpen = ticketData?.status === 'open' || 
                       document.querySelector('.badge')?.textContent?.includes('Offen');
@@ -530,19 +500,17 @@ function startAutoRefresh() {
             console.log('Auto-refresh für offenes Ticket aktiviert');
             setInterval(() => {
                 if (!document.hidden) {
-                    // Nur refresh wenn Tab aktiv ist und Ticket noch offen
                     const stillOpen = document.querySelector('.badge')?.textContent?.includes('Offen');
                     if (stillOpen) {
                         console.log('Auto-refresh: Lade Seite neu...');
                         location.reload();
                     }
                 }
-            }, 30000); // 30 Sekunden
+            }, 30000);
         }
     }, 2000);
 }
 
-// Toast Notification System
 function showToast(message, type = 'info') {
     const toastContainer = getOrCreateToastContainer();
     const toastId = 'toast-' + Date.now();
@@ -624,7 +592,6 @@ function scrollToBottom() {
     }
 }
 
-// Message-Funktionen
 function copyMessageContent(content) {
     if (!content || content === '[Nachricht ohne Inhalt]') {
         showToast('Keine Nachricht zum Kopieren vorhanden', 'warning');
@@ -666,7 +633,6 @@ function openDiscordChannel(channelId) {
     window.open(discordUrl, '_blank');
 }
 
-// Copy-to-clipboard Funktion
 function copyToClipboard(text) {
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text).then(() => {
@@ -703,7 +669,6 @@ function fallbackCopyTextToClipboard(text) {
     document.body.removeChild(textArea);
 }
 
-// Message Actions on Hover
 document.addEventListener('DOMContentLoaded', function() {
     const messages = document.querySelectorAll('.discord-message');
     messages.forEach(message => {
@@ -718,13 +683,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Auto-scroll to bottom on load
     setTimeout(scrollToBottom, 500);
 });
 
-// Keyboard Shortcuts
 document.addEventListener('keydown', function(e) {
-    // ESC zum Schließen von Modals
     if (e.key === 'Escape') {
         const modals = document.querySelectorAll('.modal.show');
         modals.forEach(modal => {
@@ -734,20 +696,17 @@ document.addEventListener('keydown', function(e) {
             }
         });
     }
-    
-    // Ctrl+D für Download Transcript
+
     if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
         e.preventDefault();
         downloadTranscript();
     }
-    
-    // Ctrl+E für Export
+
     if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
         e.preventDefault();
         exportTicketData();
     }
-    
-    // Ctrl+T für Transcript Modal
+
     if ((e.ctrlKey || e.metaKey) && e.key === 't') {
         e.preventDefault();
         viewTranscriptModal();

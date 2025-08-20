@@ -1,9 +1,3 @@
-/* ========================================
-   14TH SQUAD - DASHBOARD CSS
-   Dashboard-spezifische Styles (Duplikate entfernt)
-   ======================================== */
-
-/* Statistics Border Variants - erweitert für Dashboard */
 .border-left-primary { 
     border-left: 4px solid var(--primary-pink) !important; 
     box-shadow: -4px 0 0 var(--glow-pink);
@@ -24,12 +18,10 @@
     box-shadow: -4px 0 0 var(--warning-glow);
 }
 
-/* Shadow Utilities - spezifisch für Dashboard Stats */
 .shadow {
     box-shadow: 0 .15rem 1.75rem 0 rgba(58, 59, 69, .15) !important;
 }
 
-/* Activity Footer - Dashboard spezifisch */
 .activity-footer {
     background: rgba(255, 255, 255, 0.02);
     border-radius: var(--border-radius-sm);
@@ -42,7 +34,6 @@
     gap: var(--spacing-md);
 }
 
-/* Current Time Display - Dashboard spezifisch */
 #current-time {
     font-family: var(--font-mono);
     color: var(--primary-pink);
@@ -50,7 +41,6 @@
     font-weight: 600;
 }
 
-/* Dashboard responsive - spezifische Overrides */
 @media (max-width: 768px) {
     .activity-footer .d-flex {
         flex-direction: column;

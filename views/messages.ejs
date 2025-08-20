@@ -12,7 +12,6 @@
     </div>
 </div>
 
-<!-- Suchformular -->
 <div class="discord-search-container">
     <div class="discord-search-form">
         <form method="GET" action="/messages" class="search-form-grid">
@@ -47,7 +46,6 @@
     </div>
 </div>
 
-<!-- Suchergebnisse Info -->
 <% if (search) { %>
 <div class="discord-search-results">
     <i class="fas fa-search"></i> 
@@ -56,7 +54,6 @@
 </div>
 <% } %>
 
-<!-- Discord-Style Nachrichten Container -->
 <div class="discord-chat-wrapper">
     <div class="discord-chat-header">
         <div class="channel-name">
@@ -115,7 +112,6 @@
                 lastTimestamp = messageTime;
             %>
             
-            <!-- Date Divider -->
             <% if (showDateDivider) { %>
             <div class="discord-date-divider">
                 <div class="divider-line"></div>
@@ -139,7 +135,6 @@
                  data-timestamp="<%= message.timestamp %>">
                 
                 <% if (showAvatar) { %>
-                <!-- Avatar Column -->
                 <div class="message-avatar-wrapper">
                     <% if (message.user_id === 'SYSTEM') { %>
                         <div class="discord-avatar system-avatar">
@@ -151,8 +146,7 @@
                              class="discord-avatar user-avatar">
                     <% } %>
                 </div>
-                
-                <!-- Message Content -->
+
                 <div class="message-content-wrapper">
                     <div class="message-header-line">
                         <span class="message-author <%= message.user_id === 'SYSTEM' ? 'system-author' : '' %>">
@@ -206,7 +200,6 @@
                         <% } %>
                     </div>
                     
-                    <!-- Attachments -->
                     <% if (message.attachments && message.attachments.trim() !== '') { %>
                     <div class="message-attachments">
                         <% 
@@ -234,7 +227,6 @@
                     <% } %>
                 </div>
                 <% } else { %>
-                <!-- Continuation Message (no avatar) -->
                 <div class="message-avatar-wrapper continuation-spacer">
                     <div class="continuation-timestamp">
                         <%= new Date(message.timestamp).toLocaleTimeString('de-DE', { 
@@ -264,8 +256,6 @@
                             </span>
                         <% } %>
                     </div>
-                    
-                    <!-- Attachments for continuation -->
                     <% if (message.attachments && message.attachments.trim() !== '') { %>
                     <div class="message-attachments">
                         <% 
@@ -294,7 +284,6 @@
                 </div>
                 <% } %>
                 
-                <!-- Message Actions (on hover) -->
                 <div class="discord-message-actions">
                     <div class="message-actions-inner">
                         <button class="action-button" title="Details anzeigen" onclick="showMessageDetails('<%= message.id %>')">
@@ -315,7 +304,6 @@
             <% }); %>
         </div>
         
-        <!-- Pagination -->
         <% if (totalPages > 1) { %>
         <div class="discord-pagination">
             <div class="pagination-inner">
@@ -342,7 +330,6 @@
     </div>
 </div>
 
-<!-- Message Details Modal -->
 <div class="modal fade" id="messageDetailsModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content discord-modal">
@@ -352,7 +339,6 @@
             </div>
             <div class="modal-body discord-modal-body">
                 <div id="messageDetailsContent">
-                    <!-- Details werden hier geladen -->
                 </div>
             </div>
             <div class="modal-footer discord-modal-footer">

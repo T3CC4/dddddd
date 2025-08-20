@@ -1,9 +1,3 @@
-/* ========================================
-   14TH SQUAD - LAYOUT CSS
-   Navigation, Header, Sidebar, Layout
-   ======================================== */
-
-/* Container */
 .container-fluid {
     width: 100%;
     padding-right: var(--spacing-md);
@@ -12,7 +6,6 @@
     margin-left: auto;
 }
 
-/* Navigation Header */
 .navbar {
     position: sticky;
     top: 0;
@@ -54,7 +47,6 @@
     text-transform: uppercase;
 }
 
-/* Navigation Toggle (Mobile) */
 .navbar-toggler {
     border: none;
     padding: var(--spacing-xs);
@@ -104,7 +96,6 @@
     bottom: -6px;
 }
 
-/* Navigation Links */
 .nav-link {
     color: var(--text-secondary) !important;
     transition: all var(--transition-normal);
@@ -140,7 +131,6 @@
     text-decoration: none;
 }
 
-/* Dropdown Menus */
 .dropdown-menu {
     background: rgba(17, 17, 17, 0.95);
     border: 1px solid var(--primary-pink);
@@ -184,7 +174,6 @@
     margin: var(--spacing-sm) 0;
 }
 
-/* User Badge in Navigation */
 .user-badge {
     display: inline-flex;
     align-items: center;
@@ -200,10 +189,9 @@
     color: var(--primary-pink);
 }
 
-/* Sidebar */
 .sidebar {
     position: fixed;
-    top: 56px; /* Navbar height */
+    top: 56px; 
     left: 0;
     width: 250px;
     height: calc(100vh - 56px);
@@ -271,7 +259,6 @@
     text-align: center;
 }
 
-/* Squad Info in Sidebar */
 .squad-info {
     padding: var(--spacing-lg);
     border-top: 1px solid var(--border-color);
@@ -327,7 +314,6 @@
     50% { opacity: 0.5; }
 }
 
-/* Main Content Area */
 .main-content {
     margin-left: 250px;
     min-height: calc(100vh - 56px);
@@ -335,7 +321,6 @@
     transition: margin-left var(--transition-normal);
 }
 
-/* Page Header */
 .page-header {
     display: flex;
     justify-content: space-between;
@@ -367,35 +352,34 @@
     align-items: center;
 }
 
-/* Responsive Design */
 @media (max-width: 768px) {
     .sidebar {
         transform: translateX(-100%);
     }
-    
+
     .sidebar.show {
         transform: translateX(0);
     }
-    
+
     .main-content {
         margin-left: 0;
         padding: var(--spacing-md);
     }
-    
+
     .navbar-brand::after {
         display: none;
     }
-    
+
     .page-header {
         flex-direction: column;
         align-items: flex-start;
         gap: var(--spacing-md);
     }
-    
+
     .page-title {
         font-size: var(--font-xl);
     }
-    
+
     .page-actions {
         width: 100%;
         justify-content: flex-end;
@@ -406,22 +390,21 @@
     .main-content {
         padding: var(--spacing-sm);
     }
-    
+
     .page-header {
         padding: var(--spacing-md) 0;
     }
-    
+
     .page-title {
         font-size: var(--font-lg);
     }
-    
+
     .page-actions {
         flex-wrap: wrap;
         gap: var(--spacing-xs);
     }
 }
 
-/* Sidebar Overlay for Mobile */
 .sidebar-overlay {
     position: fixed;
     top: 0;
@@ -441,7 +424,6 @@
     visibility: visible;
 }
 
-/* Layout Utilities */
 .full-height {
     min-height: calc(100vh - 56px);
 }

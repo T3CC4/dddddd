@@ -1,9 +1,3 @@
-/* ========================================
-   14TH SQUAD - TICKETS CSS
-   Tickets-spezifische Styles (Duplikate entfernt)
-   ======================================== */
-
-/* Ticket Row States - spezifisch für Ticket-Listen */
 .ticket-open { 
     background-color: rgba(40, 167, 69, 0.1); 
     border-left: 3px solid var(--success-color);
@@ -14,7 +8,6 @@
     border-left: 3px solid var(--danger-color);
 }
 
-/* Ticket Detail - Discord Message Styling */
 .discord-message {
     display: flex;
     margin-bottom: var(--spacing-md);
@@ -40,7 +33,6 @@
     border-left-color: var(--danger-color);
 }
 
-/* Message Avatar - Ticket spezifisch */
 .message-avatar {
     margin-right: var(--spacing-md);
     flex-shrink: 0;
@@ -70,7 +62,6 @@
     border-color: var(--warning-color);
 }
 
-/* Message Content - Ticket spezifisch */
 .message-content-wrapper {
     flex: 1;
     min-width: 0;
@@ -115,7 +106,6 @@
     border-radius: var(--border-radius-sm);
 }
 
-/* Ticket Messages Container */
 .ticket-messages {
     padding: var(--spacing-md);
     background-color: rgba(0, 0, 0, 0.1);
@@ -123,18 +113,17 @@
     border: 1px solid var(--border-color);
 }
 
-/* Mobile Responsive - Ticket spezifisch */
 @media (max-width: 768px) {
     .discord-message {
         flex-direction: column;
         gap: var(--spacing-sm);
     }
-    
+
     .message-avatar {
         margin-right: 0;
         align-self: flex-start;
     }
-    
+
     .message-header {
         flex-direction: column;
         align-items: flex-start;

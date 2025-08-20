@@ -8,7 +8,6 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;500;700&display=swap" rel="stylesheet">
 
-    <!-- 14th Squad CSS -->
     <link href="/css/base.css" rel="stylesheet">
     <link href="/css/components.css" rel="stylesheet">
     <link href="/css/layout.css" rel="stylesheet">
@@ -16,7 +15,6 @@
     <link href="/css/utilities.css" rel="stylesheet">
 </head>
 <body>
-    <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="/dashboard">
@@ -46,7 +44,6 @@
     <div class="container-fluid">
         <div class="row">
             <% if (typeof user !== 'undefined' && user) { %>
-            <!-- Sidebar -->
             <nav class="col-md-3 col-lg-2 d-md-block sidebar" id="sidebar">
                 <div class="position-sticky pt-3">
                     <ul class="nav flex-column">
@@ -79,7 +76,6 @@
                         <% } %>
                     </ul>
                     
-                    <!-- Squad Info -->
                     <div class="mt-4 p-3" style="border-top: 1px solid var(--border-color);">
                         <small class="text-muted d-block mb-2">
                             <i class="fas fa-shield-alt"></i> 14TH SQUAD
@@ -92,14 +88,12 @@
                 </div>
             </nav>
 
-            <!-- Main content -->
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
                 <div class="pt-3">
                     <%- body %>
                 </div>
             </main>
             <% } else { %>
-            <!-- Full width for login page -->
             <main class="col-12">
                 <%- body %>
             </main>

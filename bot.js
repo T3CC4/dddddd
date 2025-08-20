@@ -3,7 +3,6 @@ const sqlite3 = require('sqlite3').verbose();
 const crypto = require('crypto');
 const CONFIG = require('./config.js');
 
-// Bot Setup
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -15,12 +14,10 @@ const client = new Client({
     ]
 });
 
-// Datenbank Setup
 const db = new sqlite3.Database('./bot_database.sqlite');
 
-// Initialisiere Datenbank
 db.serialize(() => {
-    // Benutzer Tabelle
+
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         username TEXT,
@@ -29,8 +26,7 @@ db.serialize(() => {
         joined_at DATETIME,
         personal_channel_id TEXT
     )`);
-    
-    // Nachrichten Log
+
     db.run(`CREATE TABLE IF NOT EXISTS message_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         message_id TEXT,
@@ -44,8 +40,7 @@ db.serialize(() => {
         edited BOOLEAN DEFAULT 0,
         deleted BOOLEAN DEFAULT 0
     )`);
-    
-    // Tickets
+
     db.run(`CREATE TABLE IF NOT EXISTS tickets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ticket_id TEXT UNIQUE,
@@ -56,15 +51,13 @@ db.serialize(() => {
         closed_at DATETIME,
         transcript TEXT
     )`);
-    
-    // Temp Voice Channels
+
     db.run(`CREATE TABLE IF NOT EXISTS temp_channels (
         channel_id TEXT PRIMARY KEY,
         owner_id TEXT,
         created_at DATETIME
     )`);
-    
-    // Web Benutzer
+
     db.run(`CREATE TABLE IF NOT EXISTS web_users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE,
@@ -74,8 +67,7 @@ db.serialize(() => {
         created_at DATETIME,
         last_login DATETIME
     )`);
-    
-    // Web Logs (OHNE IP aus Sicherheitsgründen) 
+
     db.run(`CREATE TABLE IF NOT EXISTS web_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -83,8 +75,7 @@ db.serialize(() => {
         details TEXT,
         timestamp DATETIME
     )`);
-    
-    // NEUE TABELLE: Bot-Server Kommunikation
+
     db.run(`CREATE TABLE IF NOT EXISTS bot_commands (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         command_type TEXT NOT NULL,
@@ -97,115 +88,100 @@ db.serialize(() => {
     )`);
 });
 
-// Collections für temporäre Daten
 const tempChannels = new Collection();
 const activeTickets = new Collection();
 
-// ========================================
-// BOT-SERVER KOMMUNIKATION
-// ========================================
-
-// Überwache die bot_commands Tabelle für neue Befehle
 function startCommandProcessor() {
     console.log('🔄 Command Processor gestartet...');
-    
+
     setInterval(() => {
         db.all(`SELECT * FROM bot_commands WHERE status = 'pending' ORDER BY created_at ASC`, (err, commands) => {
             if (err) {
                 console.error('❌ Fehler beim Laden der Commands:', err);
                 return;
             }
-            
+
             commands.forEach(command => {
                 processCommand(command);
             });
         });
-    }, 2000); // Prüfe alle 2 Sekunden
+    }, 2000); 
 }
 
-// Verarbeite einzelnen Command
 async function processCommand(command) {
     console.log(`🔄 Verarbeite Command: ${command.command_type} für ${command.target_id}`);
-    
+
     try {
         let result = '';
-        
+
         switch (command.command_type) {
             case 'CLOSE_TICKET':
                 result = await closeTicketFromWebsite(command.target_id, command.parameters);
                 break;
-            
+
             case 'DELETE_CHANNEL':
                 result = await deleteChannelFromWebsite(command.target_id);
                 break;
-            
+
             case 'KICK_USER':
                 result = await kickUserFromWebsite(command.target_id, command.parameters);
                 break;
-            
+
             case 'BAN_USER':
                 result = await banUserFromWebsite(command.target_id, command.parameters);
                 break;
-            
+
             case 'TIMEOUT_USER':
                 result = await timeoutUserFromWebsite(command.target_id, command.parameters);
                 break;
-            
+
             case 'TEST':
                 result = `Test Command erfolgreich verarbeitet: ${command.parameters}`;
                 break;
-            
+
             default:
                 result = `Unbekannter Command: ${command.command_type}`;
         }
-        
-        // Markiere Command als ausgeführt
+
         db.run(`UPDATE bot_commands SET status = 'completed', executed_at = ?, result = ? WHERE id = ?`,
             [new Date().toISOString(), result, command.id]
         );
-        
+
         console.log(`✅ Command ${command.id} erfolgreich ausgeführt: ${result}`);
-        
+
     } catch (error) {
         console.error(`❌ Fehler bei Command ${command.id}:`, error);
-        
-        // Markiere Command als fehlgeschlagen
+
         db.run(`UPDATE bot_commands SET status = 'failed', executed_at = ?, result = ? WHERE id = ?`,
             [new Date().toISOString(), `Fehler: ${error.message}`, command.id]
         );
     }
 }
 
-// ========================================
-// COMMAND IMPLEMENTATIONS
-// ========================================
-
-// Ticket von Website aus schließen
 async function closeTicketFromWebsite(ticketId, parameters) {
     console.log(`🎫 Schließe Ticket: ${ticketId}`);
-    
+
     return new Promise((resolve, reject) => {
         db.get(`SELECT * FROM tickets WHERE ticket_id = ? AND status = 'open'`, [ticketId], async (err, ticket) => {
             if (err) {
                 reject(new Error(`Datenbankfehler: ${err.message}`));
                 return;
             }
-            
+
             if (!ticket) {
                 resolve('Ticket nicht gefunden oder bereits geschlossen');
                 return;
             }
-            
+
             try {
-                // Hole Channel
+
                 const channel = await client.channels.fetch(ticket.channel_id);
-                
+
                 if (channel) {
-                    // Parse parameters
+
                     const params = parameters ? JSON.parse(parameters) : {};
                     const closedBy = params.closedBy || 'Web-Interface';
-                    
-                    // Sende Schließ-Nachricht
+
                     const embed = new EmbedBuilder()
                         .setTitle('🔒 Ticket wird geschlossen')
                         .setDescription('Dieses Ticket wurde über das Web-Interface geschlossen.')
@@ -217,10 +193,9 @@ async function closeTicketFromWebsite(ticketId, parameters) {
                         )
                         .setFooter({ text: '14th Squad • Ticket System' })
                         .setTimestamp();
-                    
+
                     await channel.send({ embeds: [embed] });
-                    
-                    // Warte 5 Sekunden, dann lösche Channel
+
                     setTimeout(async () => {
                         try {
                             await channel.delete();
@@ -229,12 +204,12 @@ async function closeTicketFromWebsite(ticketId, parameters) {
                             console.error('❌ Fehler beim Löschen des Channels:', deleteError);
                         }
                     }, 5000);
-                    
+
                     resolve(`Ticket ${ticketId} geschlossen und Channel wird in 5 Sekunden gelöscht`);
                 } else {
                     resolve(`Ticket ${ticketId} geschlossen, aber Channel nicht gefunden`);
                 }
-                
+
             } catch (error) {
                 reject(new Error(`Fehler beim Schließen: ${error.message}`));
             }
@@ -242,13 +217,12 @@ async function closeTicketFromWebsite(ticketId, parameters) {
     });
 }
 
-// Channel von Website aus löschen
 async function deleteChannelFromWebsite(channelId) {
     console.log(`🗑️ Lösche Channel: ${channelId}`);
-    
+
     try {
         const channel = await client.channels.fetch(channelId);
-        
+
         if (channel) {
             await channel.delete();
             return `Channel ${channelId} erfolgreich gelöscht`;
@@ -260,24 +234,22 @@ async function deleteChannelFromWebsite(channelId) {
     }
 }
 
-// Benutzer kicken
 async function kickUserFromWebsite(userId, parameters) {
     console.log(`👢 Kicke Benutzer: ${userId}`);
-    
+
     try {
         const guild = client.guilds.cache.get(CONFIG.GUILD_ID);
         const member = await guild.members.fetch(userId);
-        
+
         if (member) {
             const params = parameters ? JSON.parse(parameters) : {};
             const reason = params.reason || 'Kicked via Web-Interface';
-            
+
             await member.kick(reason);
-            
-            // Log in Discord
+
             logMessage('SYSTEM', 'Moderation Bot', 'system', 'User gekickt', 
                 `${member.user.username} (${userId}) wurde gekickt. Grund: ${reason}`);
-            
+
             return `Benutzer ${member.user.username} (${userId}) erfolgreich gekickt`;
         } else {
             return `Benutzer ${userId} nicht gefunden`;
@@ -287,56 +259,51 @@ async function kickUserFromWebsite(userId, parameters) {
     }
 }
 
-// Benutzer bannen
 async function banUserFromWebsite(userId, parameters) {
     console.log(`🔨 Banne Benutzer: ${userId}`);
-    
+
     try {
         const guild = client.guilds.cache.get(CONFIG.GUILD_ID);
         const params = parameters ? JSON.parse(parameters) : {};
         const reason = params.reason || 'Banned via Web-Interface';
-        
-        // Hole Benutzerdaten vor dem Ban
+
         let username = 'Unbekannt';
         try {
             const member = await guild.members.fetch(userId);
             username = member.user.username;
         } catch (fetchError) {
-            // Benutzer ist vielleicht nicht mehr auf dem Server
+
         }
-        
+
         await guild.members.ban(userId, { reason: reason });
-        
-        // Log in Discord
+
         logMessage('SYSTEM', 'Moderation Bot', 'system', 'User gebannt', 
             `${username} (${userId}) wurde gebannt. Grund: ${reason}`);
-        
+
         return `Benutzer ${username} (${userId}) erfolgreich gebannt`;
     } catch (error) {
         throw new Error(`Fehler beim Bannen: ${error.message}`);
     }
 }
 
-// Benutzer timeout
 async function timeoutUserFromWebsite(userId, parameters) {
     console.log(`⏰ Timeout für Benutzer: ${userId}`);
-    
+
     try {
         const guild = client.guilds.cache.get(CONFIG.GUILD_ID);
         const member = await guild.members.fetch(userId);
-        
+
         if (member) {
             const params = parameters ? JSON.parse(parameters) : {};
-            const duration = parseInt(params.duration) || 600; // 10 Minuten default
+            const duration = parseInt(params.duration) || 600; 
             const reason = params.reason || 'Timeout via Web-Interface';
-            
+
             const timeoutUntil = new Date(Date.now() + (duration * 1000));
             await member.timeout(timeoutUntil, reason);
-            
-            // Log in Discord
+
             logMessage('SYSTEM', 'Moderation Bot', 'system', 'User timeout', 
                 `${member.user.username} (${userId}) hat einen Timeout erhalten. Dauer: ${duration}s, Grund: ${reason}`);
-            
+
             return `Benutzer ${member.user.username} (${userId}) für ${duration} Sekunden getimeoutet`;
         } else {
             return `Benutzer ${userId} nicht gefunden`;
@@ -346,41 +313,31 @@ async function timeoutUserFromWebsite(userId, parameters) {
     }
 }
 
-// ========================================
-// BOT EVENTS
-// ========================================
-
 client.once('ready', () => {
     console.log(`🤖 14th Squad Bot ist online als ${client.user.tag}!`);
     console.log(`📡 Verbunden mit Server: ${client.guilds.cache.first()?.name}`);
     console.log(`👥 Server-Mitglieder: ${client.guilds.cache.first()?.memberCount}`);
-    
-    // Starte Command Processor
+
     startCommandProcessor();
-    
-    // Starte Avatar Sync nach 30 Sekunden
+
     setTimeout(() => {
         bulkSyncAvatars();
     }, 30000);
-    
-    // Wiederhole Avatar Sync alle 6 Stunden
+
     setInterval(() => {
         bulkSyncAvatars();
     }, 6 * 60 * 60 * 1000);
-    
-    // Setze Bot-Status
+
     client.user.setActivity('14th Squad Management', { type: 'WATCHING' });
 });
 
-// Event: Neuer Benutzer tritt Server bei
 client.on('guildMemberAdd', async (member) => {
     const verificationCode = crypto.randomBytes(4).toString('hex').toUpperCase();
-    
+
     try {
-        // Sync Avatar-Daten
+
         await syncUserAvatar(member.user);
-        
-        // Erstelle persönlichen Channel
+
         const personalChannel = await member.guild.channels.create({
             name: `welcome-${member.user.username}`,
             type: ChannelType.GuildText,
@@ -396,7 +353,7 @@ client.on('guildMemberAdd', async (member) => {
                 },
             ],
         });
-        
+
         const embed = new EmbedBuilder()
             .setTitle('🎉 Willkommen bei 14th Squad!')
             .setDescription(`**Hallo ${member.user.username}!**\n\n🔑 **Dein Verifikationscode:** \`${verificationCode}\`\n\n📝 Verwende \`/verify ${verificationCode}\` um dich zu verifizieren.`)
@@ -404,10 +361,9 @@ client.on('guildMemberAdd', async (member) => {
             .setThumbnail(member.user.displayAvatarURL())
             .setFooter({ text: '14th Squad • Verification System' })
             .setTimestamp();
-        
+
         await personalChannel.send({ embeds: [embed] });
-        
-        // Speichere in Datenbank mit Avatar-Daten
+
         db.run(`INSERT OR REPLACE INTO users 
                 (id, username, verification_code, verified, joined_at, personal_channel_id, avatar_hash, discriminator, last_seen) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -423,24 +379,22 @@ client.on('guildMemberAdd', async (member) => {
                 new Date().toISOString()
             ]
         );
-        
+
         logMessage('SYSTEM', 'System', 'system', 'Neuer Benutzer beigetreten', 
             `${member.user.username} (${member.user.id}) ist dem Server beigetreten.`);
-        
+
         console.log(`👤 Neuer Benutzer: ${member.user.username} | Code: ${verificationCode}`);
     } catch (error) {
         console.error('❌ Fehler bei Benutzer-Beitritt:', error);
     }
 });
 
-// Event: Voice State Update für Temp Voice Channels
 client.on('voiceStateUpdate', async (oldState, newState) => {
     try {
-        // Benutzer betritt "Join to Create" Channel
+
         if (newState.channelId === CONFIG.JOIN_TO_CREATE_CHANNEL) {
             const member = newState.member;
-            
-            // Erstelle temporären Voice Channel
+
             const tempChannel = await newState.guild.channels.create({
                 name: `${member.displayName}'s Squad`,
                 type: ChannelType.GuildVoice,
@@ -453,35 +407,31 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
                     },
                 ],
             });
-            
-            // Bewege Benutzer in neuen Channel
+
             await member.voice.setChannel(tempChannel);
-            
-            // Speichere Channel Info
+
             tempChannels.set(tempChannel.id, {
                 owner: member.user.id,
                 createdAt: Date.now()
             });
-            
+
             db.run(`INSERT INTO temp_channels (channel_id, owner_id, created_at) VALUES (?, ?, ?)`,
                 [tempChannel.id, member.user.id, new Date().toISOString()]
             );
-            
-            // Sende Control Panel
+
             await sendVoiceControlPanel(tempChannel, member);
-            
+
             console.log(`🎤 Temp Channel erstellt: ${tempChannel.name} | Owner: ${member.displayName}`);
         }
-        
-        // Lösche leere temporäre Channels
+
         if (oldState.channel && tempChannels.has(oldState.channelId)) {
             if (oldState.channel.members.size === 0) {
                 try {
                     await oldState.channel.delete();
                     tempChannels.delete(oldState.channelId);
-                    
+
                     db.run(`DELETE FROM temp_channels WHERE channel_id = ?`, [oldState.channelId]);
-                    
+
                     console.log(`🗑️ Leerer Temp Channel gelöscht: ${oldState.channel.name}`);
                 } catch (error) {
                     console.error('❌ Fehler beim Löschen des temporären Channels:', error);
@@ -493,7 +443,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     }
 });
 
-// Voice Control Panel für 14th Squad
 async function sendVoiceControlPanel(channel, member) {
     const embed = new EmbedBuilder()
         .setTitle('🎛️ 14th Squad Voice Control')
@@ -506,7 +455,7 @@ async function sendVoiceControlPanel(channel, member) {
         )
         .setFooter({ text: '14th Squad • Voice Management System' })
         .setTimestamp();
-    
+
     const row1 = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
@@ -522,7 +471,7 @@ async function sendVoiceControlPanel(channel, member) {
                 .setLabel('👻 Unsichtbar')
                 .setStyle(ButtonStyle.Secondary)
         );
-    
+
     const row2 = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
@@ -538,8 +487,7 @@ async function sendVoiceControlPanel(channel, member) {
                 .setLabel('🗑️ Löschen')
                 .setStyle(ButtonStyle.Danger)
         );
-    
-    // Sende Control Panel in den Voice Channel (als Nachricht an den Owner)
+
     try {
         await member.send({ 
             content: `🎛️ **14th Squad Voice Control Panel**`,
@@ -548,13 +496,13 @@ async function sendVoiceControlPanel(channel, member) {
         });
         console.log(`📨 Voice Control Panel an ${member.displayName} gesendet`);
     } catch (error) {
-        // Falls DM fehlschlägt, suche Text-Channel in derselben Kategorie
+
         const category = channel.parent;
         const textChannel = category?.children.cache.find(ch => 
             ch.type === ChannelType.GuildText && 
             (ch.name.includes('control') || ch.name.includes('commands') || ch.name.includes('general'))
         );
-        
+
         if (textChannel) {
             await textChannel.send({ 
                 content: `<@${member.id}> 🎛️ **Voice Control Panel:**`,
@@ -568,15 +516,13 @@ async function sendVoiceControlPanel(channel, member) {
     }
 }
 
-// Event: Nachrichten loggen
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
-    
-    // Sync Avatar bei jeder Nachricht (throttled)
+
     if (!message.author.bot) {
         await syncUserAvatar(message.author);
     }
-    
+
     logMessage(
         message.id,
         message.author.username,
@@ -589,14 +535,13 @@ client.on('messageCreate', async (message) => {
     );
 });
 
-// Event: Nachrichten bearbeitet
 client.on('messageUpdate', async (oldMessage, newMessage) => {
     if (newMessage.author?.bot) return;
-    
+
     if (!newMessage.author.bot) {
         await syncUserAvatar(newMessage.author);
     }
-    
+
     logMessage(
         newMessage.id,
         newMessage.author.username,
@@ -609,18 +554,16 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
     );
 });
 
-// Event: Nachrichten gelöscht
 client.on('messageDelete', async (message) => {
     if (message.author?.bot) return;
-    
+
     db.run(`UPDATE message_logs SET deleted = 1 WHERE message_id = ?`, [message.id]);
 });
 
-// Hilfsfunktion: Nachricht loggen
 function logMessage(messageId, username, channelId, channelName, content, attachments = '', edited = false, user = null) {
     const avatarHash = user?.avatar || null;
     const discriminator = user?.discriminator || null;
-    
+
     db.run(`INSERT INTO message_logs 
             (message_id, user_id, username, channel_id, channel_name, content, attachments, timestamp, edited, user_avatar_hash, user_discriminator) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -640,7 +583,6 @@ function logMessage(messageId, username, channelId, channelName, content, attach
     );
 }
 
-// Slash Commands Setup
 const { REST, Routes } = require('discord.js');
 
 const commands = [
@@ -670,7 +612,6 @@ const commands = [
     }
 ];
 
-// Commands registrieren
 const rest = new REST({ version: '10' }).setToken(CONFIG.BOT_TOKEN);
 
 (async () => {
@@ -686,27 +627,25 @@ const rest = new REST({ version: '10' }).setToken(CONFIG.BOT_TOKEN);
     }
 })();
 
-// Button Interaction Handler für Voice Controls und Tickets
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
-    
+
     const { customId } = interaction;
-    
-    // Voice Channel Controls
+
     if (customId.startsWith('voice_')) {
         const parts = customId.split('_');
         const action = parts[1];
         const channelId = parts[2];
-        
+
         const channel = interaction.guild.channels.cache.get(channelId);
-        
+
         if (!channel || !tempChannels.has(channelId)) {
             return interaction.reply({ 
                 content: '❌ Channel nicht gefunden oder nicht berechtigt!', 
                 flags: MessageFlags.Ephemeral 
             });
         }
-        
+
         const channelData = tempChannels.get(channelId);
         if (channelData.owner !== interaction.user.id) {
             return interaction.reply({ 
@@ -714,7 +653,7 @@ client.on('interactionCreate', async (interaction) => {
                 flags: MessageFlags.Ephemeral 
             });
         }
-        
+
         try {
             switch (action) {
                 case 'lock':
@@ -726,7 +665,7 @@ client.on('interactionCreate', async (interaction) => {
                         flags: MessageFlags.Ephemeral 
                     });
                     break;
-                
+
                 case 'unlock':
                     await channel.permissionOverwrites.edit(interaction.guild.id, {
                         Connect: null
@@ -736,7 +675,7 @@ client.on('interactionCreate', async (interaction) => {
                         flags: MessageFlags.Ephemeral 
                     });
                     break;
-                
+
                 case 'invisible':
                     await channel.permissionOverwrites.edit(interaction.guild.id, {
                         ViewChannel: false
@@ -746,13 +685,13 @@ client.on('interactionCreate', async (interaction) => {
                         flags: MessageFlags.Ephemeral 
                     });
                     break;
-                
+
                 case 'limit':
-                    // Modal für Limit-Eingabe
+
                     const limitModal = new ModalBuilder()
                         .setCustomId(`voice_limit_modal_${channelId}`)
                         .setTitle('Voice Channel Limit');
-                    
+
                     const limitInput = new TextInputBuilder()
                         .setCustomId('limit_input')
                         .setLabel('Benutzer-Limit (0 = unbegrenzt)')
@@ -761,19 +700,19 @@ client.on('interactionCreate', async (interaction) => {
                         .setMaxLength(2)
                         .setPlaceholder('10')
                         .setValue(channel.userLimit.toString());
-                    
+
                     const limitRow = new ActionRowBuilder().addComponents(limitInput);
                     limitModal.addComponents(limitRow);
-                    
+
                     await interaction.showModal(limitModal);
                     break;
-                
+
                 case 'rename':
-                    // Modal für Namen-Eingabe
+
                     const renameModal = new ModalBuilder()
                         .setCustomId(`voice_rename_modal_${channelId}`)
                         .setTitle('Voice Channel umbenennen');
-                    
+
                     const nameInput = new TextInputBuilder()
                         .setCustomId('name_input')
                         .setLabel('Neuer Channel-Name')
@@ -782,13 +721,13 @@ client.on('interactionCreate', async (interaction) => {
                         .setMaxLength(50)
                         .setPlaceholder('Mein 14th Squad Channel')
                         .setValue(channel.name);
-                    
+
                     const nameRow = new ActionRowBuilder().addComponents(nameInput);
                     renameModal.addComponents(nameRow);
-                    
+
                     await interaction.showModal(renameModal);
                     break;
-                
+
                 case 'delete':
                     await channel.delete();
                     tempChannels.delete(channelId);
@@ -807,11 +746,10 @@ client.on('interactionCreate', async (interaction) => {
             });
         }
     }
-    
-    // Ticket schließen Button - VERBESSERT
+
     if (customId === 'close_ticket') {
         const channel = interaction.channel;
-        
+
         db.get(`SELECT * FROM tickets WHERE channel_id = ? AND status = 'open'`, [channel.id], async (err, ticket) => {
             if (err) {
                 console.error('Database error:', err);
@@ -821,10 +759,10 @@ client.on('interactionCreate', async (interaction) => {
                 });
                 return;
             }
-            
+
             if (ticket) {
                 try {
-                    // Erstelle Transcript vor dem Schließen
+
                     const messages = await channel.messages.fetch({ limit: 100 });
                     const transcript = messages.reverse().map(msg => ({
                         username: msg.author.username,
@@ -832,21 +770,18 @@ client.on('interactionCreate', async (interaction) => {
                         timestamp: msg.createdAt.toISOString(),
                         attachments: msg.attachments.map(att => att.url).join(', ')
                     }));
-                    
-                    // Update Ticket in Datenbank
+
                     db.run(`UPDATE tickets SET status = 'closed', closed_at = ?, transcript = ? WHERE ticket_id = ?`,
                         [new Date().toISOString(), JSON.stringify(transcript), ticket.ticket_id]
                     );
-                    
+
                     await interaction.reply({ 
                         content: '🔒 **Ticket wird geschlossen...** Transcript wurde gespeichert.\n\n⏱️ Channel wird in 5 Sekunden gelöscht.' 
                     });
-                    
-                    // Log für Web-Interface
+
                     logMessage('SYSTEM', 'Bot System', 'system', 'Ticket geschlossen', 
                         `Ticket ${ticket.ticket_id} wurde über Discord Button geschlossen.`);
-                    
-                    // Lösche Channel nach 5 Sekunden
+
                     setTimeout(async () => {
                         try {
                             await channel.delete();
@@ -855,7 +790,7 @@ client.on('interactionCreate', async (interaction) => {
                             console.error('❌ Fehler beim Löschen des Channels:', deleteError);
                         }
                     }, 5000);
-                    
+
                     console.log(`🔒 Ticket geschlossen: ${ticket.ticket_id}`);
                 } catch (error) {
                     console.error('❌ Fehler beim Schließen des Tickets:', error);
@@ -874,17 +809,16 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// Modal Submit Handler
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isModalSubmit()) return;
-    
+
     const { customId } = interaction;
-    
+
     if (customId.startsWith('voice_limit_modal_')) {
         const channelId = customId.split('_')[3];
         const channel = interaction.guild.channels.cache.get(channelId);
         const limit = parseInt(interaction.fields.getTextInputValue('limit_input'));
-        
+
         if (channel && tempChannels.has(channelId)) {
             try {
                 await channel.setUserLimit(limit);
@@ -906,12 +840,12 @@ client.on('interactionCreate', async (interaction) => {
             });
         }
     }
-    
+
     if (customId.startsWith('voice_rename_modal_')) {
         const channelId = customId.split('_')[3];
         const channel = interaction.guild.channels.cache.get(channelId);
         const newName = interaction.fields.getTextInputValue('name_input');
-        
+
         if (channel && tempChannels.has(channelId)) {
             try {
                 await channel.setName(newName);
@@ -935,16 +869,15 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// Slash Command Handler  
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
-    
+
     const { commandName } = interaction;
-    
+
     try {
         if (commandName === 'verify') {
             const code = interaction.options.getString('code');
-            
+
             db.get(`SELECT * FROM users WHERE id = ? AND verification_code = ?`, 
                 [interaction.user.id, code], 
                 async (err, row) => {
@@ -956,17 +889,16 @@ client.on('interactionCreate', async (interaction) => {
                         });
                         return;
                     }
-                    
+
                     if (row && !row.verified) {
-                        // Verifiziere Benutzer
+
                         db.run(`UPDATE users SET verified = 1 WHERE id = ?`, [interaction.user.id]);
-                        
+
                         const role = interaction.guild.roles.cache.get(CONFIG.VERIFIED_ROLE);
                         if (role) {
                             await interaction.member.roles.add(role);
                         }
-                        
-                        // Lösche persönlichen Channel (mit Fehlerbehandlung)
+
                         if (row.personal_channel_id) {
                             try {
                                 const personalChannel = await interaction.guild.channels.fetch(row.personal_channel_id);
@@ -975,15 +907,15 @@ client.on('interactionCreate', async (interaction) => {
                                 }
                             } catch (channelError) {
                                 console.log(`⚠️ Persönlicher Channel ${row.personal_channel_id} nicht gefunden oder bereits gelöscht`);
-                                // Channel existiert nicht mehr, das ist okay
+
                             }
                         }
-                        
+
                         await interaction.reply({ 
                             content: '✅ **Erfolgreich verifiziert!** Willkommen bei 14th Squad!', 
                             flags: MessageFlags.Ephemeral 
                         });
-                        
+
                         console.log(`✅ Benutzer verifiziert: ${interaction.user.username}`);
                     } else {
                         await interaction.reply({ 
@@ -994,11 +926,11 @@ client.on('interactionCreate', async (interaction) => {
                 }
             );
         }
-        
+
         if (commandName === 'ticket') {
             const grund = interaction.options.getString('grund');
             const ticketId = `ticket-${Date.now()}`;
-            
+
             try {
                 const ticketChannel = await interaction.guild.channels.create({
                     name: ticketId,
@@ -1023,7 +955,7 @@ client.on('interactionCreate', async (interaction) => {
                         },
                     ],
                 });
-                
+
                 const embed = new EmbedBuilder()
                     .setTitle('🎫 14th Squad Support Ticket')
                     .setDescription(`**Erstellt von:** ${interaction.user}\n**Grund:** ${grund}`)
@@ -1031,7 +963,7 @@ client.on('interactionCreate', async (interaction) => {
                     .setThumbnail(interaction.user.displayAvatarURL())
                     .setFooter({ text: '14th Squad • Support System' })
                     .setTimestamp();
-                
+
                 const closeButton = new ActionRowBuilder()
                     .addComponents(
                         new ButtonBuilder()
@@ -1039,19 +971,18 @@ client.on('interactionCreate', async (interaction) => {
                             .setLabel('🔒 Ticket schließen')
                             .setStyle(ButtonStyle.Danger)
                     );
-                
+
                 await ticketChannel.send({ embeds: [embed], components: [closeButton] });
-                
-                // Speichere Ticket
+
                 db.run(`INSERT INTO tickets (ticket_id, user_id, channel_id, status, created_at) VALUES (?, ?, ?, ?, ?)`,
                     [ticketId, interaction.user.id, ticketChannel.id, 'open', new Date().toISOString()]
                 );
-                
+
                 await interaction.reply({ 
                     content: `✅ **Ticket erstellt:** ${ticketChannel}`, 
                     flags: MessageFlags.Ephemeral 
                 });
-                
+
                 console.log(`🎫 Neues Ticket: ${ticketId} von ${interaction.user.username}`);
             } catch (error) {
                 console.error('❌ Fehler beim Erstellen des Tickets:', error);
@@ -1061,11 +992,11 @@ client.on('interactionCreate', async (interaction) => {
                 });
             }
         }
-        
+
         if (commandName === 'close-ticket') {
-            // Überprüfe ob es ein Ticket-Channel ist
+
             const channel = interaction.channel;
-            
+
             db.get(`SELECT * FROM tickets WHERE channel_id = ? AND status = 'open'`, [channel.id], async (err, ticket) => {
                 if (err) {
                     console.error('Database error:', err);
@@ -1075,10 +1006,10 @@ client.on('interactionCreate', async (interaction) => {
                     });
                     return;
                 }
-                
+
                 if (ticket) {
                     try {
-                        // Erstelle Transcript vor dem Schließen
+
                         const messages = await channel.messages.fetch({ limit: 100 });
                         const transcript = messages.reverse().map(msg => ({
                             username: msg.author.username,
@@ -1086,21 +1017,18 @@ client.on('interactionCreate', async (interaction) => {
                             timestamp: msg.createdAt.toISOString(),
                             attachments: msg.attachments.map(att => att.url).join(', ')
                         }));
-                        
-                        // Update Ticket in Datenbank
+
                         db.run(`UPDATE tickets SET status = 'closed', closed_at = ?, transcript = ? WHERE ticket_id = ?`,
                             [new Date().toISOString(), JSON.stringify(transcript), ticket.ticket_id]
                         );
-                        
+
                         await interaction.reply({ 
                             content: '🔒 **Ticket wird geschlossen...** Transcript wurde gespeichert.\n\n⏱️ Channel wird in 5 Sekunden gelöscht.' 
                         });
-                        
-                        // Log für Web-Interface
+
                         logMessage('SYSTEM', 'Bot System', 'system', 'Ticket geschlossen', 
                             `Ticket ${ticket.ticket_id} wurde über Slash Command geschlossen.`);
-                        
-                        // Lösche Channel nach 5 Sekunden
+
                         setTimeout(async () => {
                             try {
                                 await channel.delete();
@@ -1109,7 +1037,7 @@ client.on('interactionCreate', async (interaction) => {
                                 console.error('❌ Fehler beim Löschen des Channels:', deleteError);
                             }
                         }, 5000);
-                        
+
                         console.log(`🔒 Ticket geschlossen: ${ticket.ticket_id}`);
                     } catch (error) {
                         console.error('❌ Fehler beim Schließen des Tickets:', error);
@@ -1130,8 +1058,7 @@ client.on('interactionCreate', async (interaction) => {
         }
     } catch (error) {
         console.error('❌ Fehler bei Slash Command:', error);
-        
-        // Sichere Fehlerbehandlung für Interaction Reply
+
         try {
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({ 
@@ -1154,7 +1081,7 @@ async function syncUserAvatar(user) {
         const avatarHash = user.avatar;
         const discriminator = user.discriminator;
         const username = user.username || user.globalName;
-        
+
         db.run(`
             UPDATE users 
             SET avatar_hash = ?, discriminator = ?, username = ?, last_seen = ?
@@ -1178,39 +1105,36 @@ async function syncAllAvatarsCommand() {
 
 async function bulkSyncAvatars() {
     console.log('🔄 Starte Bulk Avatar Sync...');
-    
+
     try {
         const guild = client.guilds.cache.get(CONFIG.GUILD_ID);
         if (!guild) {
             console.error('Guild nicht gefunden');
             return;
         }
-        
-        // Lade alle Mitglieder
+
         const members = await guild.members.fetch();
         console.log(`📥 ${members.size} Mitglieder gefunden`);
-        
+
         let syncCount = 0;
         for (const [id, member] of members) {
             if (!member.user.bot) {
                 await syncUserAvatar(member.user);
                 syncCount++;
-                
-                // Pause zwischen Sync-Operationen
+
                 if (syncCount % 10 === 0) {
                     await new Promise(resolve => setTimeout(resolve, 1000));
                     console.log(`📊 ${syncCount}/${members.size - members.filter(m => m.user.bot).size} Avatare synchronisiert`);
                 }
             }
         }
-        
+
         console.log(`✅ Bulk Avatar Sync abgeschlossen: ${syncCount} Benutzer`);
     } catch (error) {
         console.error('❌ Bulk Avatar Sync Fehler:', error);
     }
 }
 
-// Error Handling
 process.on('unhandledRejection', error => {
     console.error('❌ Unhandled promise rejection:', error);
 });
@@ -1219,7 +1143,6 @@ process.on('uncaughtException', error => {
     console.error('❌ Uncaught exception:', error);
 });
 
-// Graceful Shutdown
 process.on('SIGINT', () => {
     console.log('🛑 Shutdown-Signal empfangen...');
     db.close();
@@ -1227,7 +1150,6 @@ process.on('SIGINT', () => {
     process.exit(0);
 });
 
-// Bot starten
 client.login(CONFIG.BOT_TOKEN);
 
 module.exports = { 

@@ -4,20 +4,18 @@ const sqlite3 = require('sqlite3').verbose();
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 
-// Datenbank-Verbindung
 const db = new sqlite3.Database('./bot_database.sqlite');
 
-// Hilfsfunktionen
 function requireAuth(requiredRole = 'mod') {
     return (req, res, next) => {
         if (!req.session.user) {
             return res.status(401).json({ error: 'Nicht authentifiziert' });
         }
-        
+
         if (requiredRole === 'admin' && req.session.user.role !== 'admin') {
             return res.status(403).json({ error: 'Admin-Berechtigung erforderlich' });
         }
-        
+
         next();
     };
 }
@@ -31,7 +29,7 @@ function logWebAction(userId, action, details) {
 function sendCommandToBot(commandType, targetId, parameters = null) {
     return new Promise((resolve, reject) => {
         const parametersJson = parameters ? JSON.stringify(parameters) : null;
-        
+
         db.run(`INSERT INTO bot_commands (command_type, target_id, parameters, status, created_at) 
                 VALUES (?, ?, ?, 'pending', ?)`,
             [commandType, targetId, parametersJson, new Date().toISOString()],
@@ -49,14 +47,14 @@ function sendCommandToBot(commandType, targetId, parameters = null) {
 function waitForCommandResult(commandId, timeout = 30000) {
     return new Promise((resolve, reject) => {
         const startTime = Date.now();
-        
+
         const checkStatus = () => {
             db.get(`SELECT * FROM bot_commands WHERE id = ?`, [commandId], (err, command) => {
                 if (err) {
                     reject(err);
                     return;
                 }
-                
+
                 if (command.status === 'completed') {
                     resolve({ success: true, result: command.result });
                 } else if (command.status === 'failed') {
@@ -68,23 +66,23 @@ function waitForCommandResult(commandId, timeout = 30000) {
                 }
             });
         };
-        
+
         checkStatus();
     });
 }
 
 function getTimeAgo(timestamp) {
     if (!timestamp) return 'Unbekannt';
-    
+
     const now = new Date();
     const time = new Date(timestamp);
-    
+
     if (isNaN(time.getTime())) {
         return 'Unbekannt';
     }
-    
+
     const diffInSeconds = Math.floor((now - time) / 1000);
-    
+
     if (diffInSeconds < 60) {
         return 'vor wenigen Sekunden';
     } else if (diffInSeconds < 3600) {
@@ -101,14 +99,9 @@ function getTimeAgo(timestamp) {
     }
 }
 
-// ========================================
-// DASHBOARD API
-// ========================================
-
-// Dashboard Aktivitäten laden
 router.get('/dashboard/activities', requireAuth(), (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
-    
+
     const activitiesQuery = `
         SELECT 
             'message' as type,
@@ -123,9 +116,9 @@ router.get('/dashboard/activities', requireAuth(), (req, res) => {
             AND content IS NOT NULL 
             AND content != ''
             AND timestamp IS NOT NULL
-        
+
         UNION ALL
-        
+
         SELECT 
             'ticket_created' as type,
             (SELECT username FROM users WHERE id = tickets.user_id) as actor,
@@ -136,9 +129,9 @@ router.get('/dashboard/activities', requireAuth(), (req, res) => {
             'success' as color
         FROM tickets
         WHERE created_at IS NOT NULL
-        
+
         UNION ALL
-        
+
         SELECT 
             'user_verified' as type,
             username as actor,
@@ -150,20 +143,20 @@ router.get('/dashboard/activities', requireAuth(), (req, res) => {
         FROM users 
         WHERE verified = 1 
             AND joined_at IS NOT NULL
-        
+
         ORDER BY timestamp DESC
         LIMIT ?
     `;
-    
+
     db.all(activitiesQuery, [limit], (err, activities) => {
         if (err) {
             console.error('Activities API error:', err);
             return res.status(500).json({ error: 'Fehler beim Laden der Aktivitäten' });
         }
-        
+
         const formattedActivities = (activities || []).map(activity => {
             const timeAgo = getTimeAgo(activity.timestamp);
-            
+
             let activityText = '';
             switch(activity.type) {
                 case 'message':
@@ -181,7 +174,7 @@ router.get('/dashboard/activities', requireAuth(), (req, res) => {
                 default:
                     activityText = `${activity.actor || 'Unbekannt'}: ${activity.details || 'Aktivität'}`;
             }
-            
+
             return {
                 type: activity.type,
                 icon: activity.icon,
@@ -191,32 +184,27 @@ router.get('/dashboard/activities', requireAuth(), (req, res) => {
                 timestamp: activity.timestamp
             };
         });
-        
+
         res.json({ activities: formattedActivities });
     });
 });
 
-// ========================================
-// TICKET API - mit Bot-Kommunikation
-// ========================================
-
-// Ticket schließen API - VERBESSERT mit Bot-Kommunikation
 router.post('/tickets/:ticketId/close', requireAuth(), async (req, res) => {
     const ticketId = req.params.ticketId;
-    
+
     try {
-        // Hole Ticket-Informationen
+
         db.get(`SELECT * FROM tickets WHERE ticket_id = ? AND status = 'open'`, [ticketId], async (err, ticket) => {
             if (err) {
                 return res.status(500).json({ error: 'Datenbankfehler' });
             }
-            
+
             if (!ticket) {
                 return res.status(404).json({ error: 'Ticket nicht gefunden oder bereits geschlossen' });
             }
-            
+
             try {
-                // Erstelle Transcript
+
                 db.all(`
                     SELECT * FROM message_logs 
                     WHERE channel_id = ? 
@@ -226,41 +214,38 @@ router.post('/tickets/:ticketId/close', requireAuth(), async (req, res) => {
                         console.error('Ticket messages error:', err);
                         messages = [];
                     }
-                    
+
                     const transcript = JSON.stringify(messages || []);
-                    
-                    // Update Ticket in Datenbank
+
                     db.run(`UPDATE tickets SET status = 'closed', closed_at = ?, transcript = ? WHERE ticket_id = ?`,
                         [new Date().toISOString(), transcript, ticketId], async (err) => {
                             if (err) {
                                 return res.status(500).json({ error: 'Fehler beim Schließen' });
                             }
-                            
+
                             logWebAction(req.session.user.id, 'CLOSE_TICKET', `Ticket ${ticketId} über Web-Interface geschlossen`);
-                            
+
                             try {
-                                // Sende Command an Bot
+
                                 const commandId = await sendCommandToBot('CLOSE_TICKET', ticketId, {
                                     closedBy: req.session.user.username,
                                     closedAt: new Date().toISOString()
                                 });
-                                
+
                                 console.log(`📤 Command an Bot gesendet: ${commandId}`);
-                                
-                                // Warte auf Bot-Antwort (optional - für bessere UX)
+
                                 const result = await waitForCommandResult(commandId, 10000);
-                                
+
                                 res.json({ 
                                     success: true, 
                                     message: 'Ticket erfolgreich geschlossen',
                                     transcript_available: true,
                                     bot_result: result
                                 });
-                                
+
                             } catch (botError) {
                                 console.error('❌ Fehler bei Bot-Kommunikation:', botError);
-                                
-                                // Ticket wurde trotzdem geschlossen, nur Bot-Communication fehlgeschlagen
+
                                 res.json({ 
                                     success: true, 
                                     message: 'Ticket geschlossen, aber Bot-Kommunikation fehlgeschlagen',
@@ -270,7 +255,7 @@ router.post('/tickets/:ticketId/close', requireAuth(), async (req, res) => {
                             }
                         });
                 });
-                
+
             } catch (error) {
                 console.error('❌ Fehler beim Ticket schließen:', error);
                 res.status(500).json({ error: 'Unerwarteter Fehler beim Schließen' });
@@ -284,23 +269,21 @@ router.post('/tickets/:ticketId/close', requireAuth(), async (req, res) => {
 
 router.get('/tickets/:ticketId/details', requireAuth(), (req, res) => {
     const ticketId = req.params.ticketId;
-    
+
     db.get(`SELECT * FROM tickets WHERE ticket_id = ?`, [ticketId], (err, ticket) => {
         if (err) {
             return res.status(500).json({ error: 'Datenbankfehler' });
         }
-        
+
         if (!ticket) {
             return res.status(404).json({ error: 'Ticket nicht gefunden' });
         }
-        
-        // Lade auch User-Informationen
+
         db.get(`SELECT * FROM users WHERE id = ?`, [ticket.user_id], (err, user) => {
             if (err) {
                 console.error('User lookup error:', err);
             }
-            
-            // Lade Nachrichten-Statistiken
+
             db.all(`
                 SELECT 
                     COUNT(*) as message_count,
@@ -313,7 +296,7 @@ router.get('/tickets/:ticketId/details', requireAuth(), (req, res) => {
                     console.error('Stats error:', err);
                     stats = [{ message_count: 0, participant_count: 0, attachment_count: 0 }];
                 }
-                
+
                 res.json({
                     success: true,
                     ticket: {
@@ -327,20 +310,18 @@ router.get('/tickets/:ticketId/details', requireAuth(), (req, res) => {
     });
 });
 
-// Ticket Transcript herunterladen - VERBESSERT
 router.get('/tickets/:ticketId/transcript', requireAuth(), (req, res) => {
     const ticketId = req.params.ticketId;
-    
+
     db.get(`SELECT * FROM tickets WHERE ticket_id = ?`, [ticketId], (err, ticket) => {
         if (err) {
             return res.status(500).json({ error: 'Datenbankfehler' });
         }
-        
+
         if (!ticket) {
             return res.status(404).json({ error: 'Ticket nicht gefunden' });
         }
-        
-        // Lade Nachrichten direkt aus message_logs
+
         db.all(`
             SELECT ml.*, u.username, u.avatar_hash, u.discriminator
             FROM message_logs ml
@@ -352,8 +333,7 @@ router.get('/tickets/:ticketId/transcript', requireAuth(), (req, res) => {
                 console.error('Messages error:', err);
                 messages = [];
             }
-            
-            // Falls keine Nachrichten in message_logs, versuche transcript
+
             if (messages.length === 0 && ticket.transcript) {
                 try {
                     messages = JSON.parse(ticket.transcript);
@@ -362,8 +342,7 @@ router.get('/tickets/:ticketId/transcript', requireAuth(), (req, res) => {
                     messages = [];
                 }
             }
-            
-            // Erstelle detailliertes Transcript
+
             let transcriptText = `14th Squad - Ticket Transcript\n`;
             transcriptText += `${'='.repeat(60)}\n`;
             transcriptText += `Ticket ID: ${ticket.ticket_id}\n`;
@@ -374,48 +353,47 @@ router.get('/tickets/:ticketId/transcript', requireAuth(), (req, res) => {
             }
             transcriptText += `Nachrichten: ${messages.length}\n`;
             transcriptText += `${'='.repeat(60)}\n\n`;
-            
+
             messages.forEach((msg, index) => {
                 const timestamp = new Date(msg.timestamp).toLocaleString('de-DE');
                 const username = msg.username || 'Unbekannt';
                 const content = msg.content || '[Keine Nachricht]';
-                
+
                 transcriptText += `[${index + 1}] [${timestamp}] ${username}:\n`;
                 transcriptText += `${content}\n`;
-                
+
                 if (msg.attachments) {
                     transcriptText += `    📎 Anhänge: ${msg.attachments}\n`;
                 }
-                
+
                 if (msg.edited) {
                     transcriptText += `    ✏️ Nachricht wurde bearbeitet\n`;
                 }
-                
+
                 if (msg.deleted) {
                     transcriptText += `    🗑️ Nachricht wurde gelöscht\n`;
                 }
-                
+
                 transcriptText += '\n';
             });
-            
+
             transcriptText += `\n${'='.repeat(60)}\n`;
             transcriptText += `Transcript erstellt: ${new Date().toLocaleString('de-DE')}\n`;
             transcriptText += `Erstellt von: ${req.session.user.username}\n`;
             transcriptText += `14th Squad Management System v1.1\n`;
-            
+
             res.setHeader('Content-Type', 'text/plain; charset=utf-8');
             res.setHeader('Content-Disposition', `attachment; filename="ticket_${ticketId}_transcript_${Date.now()}.txt"`);
             res.send(transcriptText);
-            
+
             logWebAction(req.session.user.id, 'DOWNLOAD_TRANSCRIPT', `Transcript für Ticket ${ticketId} heruntergeladen`);
         });
     });
 });
 
-// Ticket Daten exportieren - NEU
 router.get('/tickets/:ticketId/export', requireAuth(), (req, res) => {
     const ticketId = req.params.ticketId;
-    
+
     db.get(`
         SELECT t.*, u.username, u.avatar_hash, u.discriminator
         FROM tickets t 
@@ -425,12 +403,11 @@ router.get('/tickets/:ticketId/export', requireAuth(), (req, res) => {
         if (err) {
             return res.status(500).json({ error: 'Datenbankfehler' });
         }
-        
+
         if (!ticket) {
             return res.status(404).json({ error: 'Ticket nicht gefunden' });
         }
-        
-        // Lade alle Nachrichten mit User-Infos
+
         db.all(`
             SELECT ml.*, u.username, u.avatar_hash, u.discriminator
             FROM message_logs ml
@@ -442,12 +419,11 @@ router.get('/tickets/:ticketId/export', requireAuth(), (req, res) => {
                 console.error('Messages error:', err);
                 messages = [];
             }
-            
-            // Berechne Statistiken
+
             const messagesByUser = {};
             const attachmentCount = messages.filter(m => m.attachments && m.attachments.trim() !== '').length;
             const participantCount = new Set(messages.map(m => m.username)).size;
-            
+
             messages.forEach(msg => {
                 if (messagesByUser[msg.username]) {
                     messagesByUser[msg.username]++;
@@ -455,13 +431,11 @@ router.get('/tickets/:ticketId/export', requireAuth(), (req, res) => {
                     messagesByUser[msg.username] = 1;
                 }
             });
-            
-            // Berechne Dauer
+
             const duration = ticket.closed_at ? 
                 Math.round((new Date(ticket.closed_at) - new Date(ticket.created_at)) / (1000 * 60)) : 
                 Math.round((new Date() - new Date(ticket.created_at)) / (1000 * 60));
-            
-            // Erstelle Export-Daten
+
             const exportData = {
                 ticket_info: {
                     ticket_id: ticket.ticket_id,
@@ -500,37 +474,32 @@ router.get('/tickets/:ticketId/export', requireAuth(), (req, res) => {
                     system_version: '14th Squad Management v1.1'
                 }
             };
-            
+
             res.setHeader('Content-Type', 'application/json');
             res.setHeader('Content-Disposition', `attachment; filename="ticket_${ticketId}_data_${Date.now()}.json"`);
             res.json(exportData);
-            
+
             logWebAction(req.session.user.id, 'EXPORT_TICKET', `Ticket-Daten für ${ticketId} exportiert`);
         });
     });
 });
 
-// ========================================
-// BENUTZER MANAGEMENT API
-// ========================================
-
 router.get('/discord/users/:userId', requireAuth(), (req, res) => {
     const userId = req.params.userId;
-    
-    // Hole User-Daten aus der Datenbank
+
     db.get(`SELECT * FROM users WHERE id = ?`, [userId], (err, user) => {
         if (err) {
             return res.status(500).json({ error: 'Datenbankfehler' });
         }
-        
+
         if (user) {
             res.json({
                 success: true,
                 user: {
                     id: user.id,
                     username: user.username,
-                    avatar: user.avatar_hash || null, // Braucht neue Spalte
-                    discriminator: user.discriminator || null, // Braucht neue Spalte
+                    avatar: user.avatar_hash || null, 
+                    discriminator: user.discriminator || null, 
                     verified: user.verified
                 }
             });
@@ -543,26 +512,22 @@ router.get('/discord/users/:userId', requireAuth(), (req, res) => {
     });
 });
 
-// Fehlende API-Endpunkte für api.js
-
-// 1. Discord User API für Avatar-Laden
 router.get('/discord/users/:userId', requireAuth(), (req, res) => {
     const userId = req.params.userId;
-    
-    // Hole User-Daten aus der Datenbank
+
     db.get(`SELECT * FROM users WHERE id = ?`, [userId], (err, user) => {
         if (err) {
             return res.status(500).json({ error: 'Datenbankfehler' });
         }
-        
+
         if (user) {
             res.json({
                 success: true,
                 user: {
                     id: user.id,
                     username: user.username,
-                    avatar: user.avatar_hash || null, // Braucht neue Spalte
-                    discriminator: user.discriminator || null, // Braucht neue Spalte
+                    avatar: user.avatar_hash || null, 
+                    discriminator: user.discriminator || null, 
                     verified: user.verified
                 }
             });
@@ -575,23 +540,21 @@ router.get('/discord/users/:userId', requireAuth(), (req, res) => {
     });
 });
 
-// 2. Batch User API für effizientes Avatar-Laden
 router.post('/discord/users/batch', requireAuth(), (req, res) => {
     const { userIds } = req.body;
-    
+
     if (!Array.isArray(userIds) || userIds.length === 0) {
         return res.status(400).json({ error: 'Ungültige User IDs' });
     }
-    
-    // Begrenze auf max 50 User pro Anfrage
+
     const limitedUserIds = userIds.slice(0, 50);
     const placeholders = limitedUserIds.map(() => '?').join(',');
-    
+
     db.all(`SELECT * FROM users WHERE id IN (${placeholders})`, limitedUserIds, (err, users) => {
         if (err) {
             return res.status(500).json({ error: 'Datenbankfehler' });
         }
-        
+
         const userData = users.map(user => ({
             id: user.id,
             username: user.username,
@@ -599,7 +562,7 @@ router.post('/discord/users/batch', requireAuth(), (req, res) => {
             discriminator: user.discriminator || null,
             verified: user.verified
         }));
-        
+
         res.json({
             success: true,
             users: userData
@@ -607,7 +570,6 @@ router.post('/discord/users/batch', requireAuth(), (req, res) => {
     });
 });
 
-// Alle Discord-Benutzer laden
 router.get('/users/discord', requireAuth(), (req, res) => {
     db.all(`
         SELECT 
@@ -621,12 +583,11 @@ router.get('/users/discord', requireAuth(), (req, res) => {
         if (err) {
             return res.status(500).json({ error: 'Fehler beim Laden der Benutzer' });
         }
-        
+
         res.json({ users: users || [] });
     });
 });
 
-// Discord Benutzer Statistiken
 router.get('/users/discord/stats', requireAuth(), (req, res) => {
     db.all(`
         SELECT 
@@ -639,41 +600,37 @@ router.get('/users/discord/stats', requireAuth(), (req, res) => {
         if (err) {
             return res.status(500).json({ error: 'Fehler beim Laden der Statistiken' });
         }
-        
+
         res.json(stats[0] || { total_users: 0, verified_users: 0, pending_users: 0, active_channels: 0 });
     });
 });
 
-// Discord Benutzer manuell verifizieren
 router.post('/users/discord/:userId/verify', requireAuth('admin'), (req, res) => {
     const userId = req.params.userId;
-    
+
     db.run(`UPDATE users SET verified = 1 WHERE id = ?`, [userId], function(err) {
         if (err) {
             return res.status(500).json({ error: 'Fehler bei der Verifikation' });
         }
-        
+
         if (this.changes === 0) {
             return res.status(404).json({ error: 'Benutzer nicht gefunden' });
         }
-        
+
         logWebAction(req.session.user.id, 'VERIFY_USER', `Discord-Benutzer ${userId} manuell verifiziert`);
-        
+
         res.json({ success: true, message: 'Benutzer erfolgreich verifiziert' });
     });
 });
 
-// Discord Benutzer Details
 router.get('/users/discord/:userId/details', requireAuth(), (req, res) => {
     const userId = req.params.userId;
-    
-    // Benutzer-Grunddaten
+
     db.get(`SELECT * FROM users WHERE id = ?`, [userId], (err, user) => {
         if (err || !user) {
             return res.status(404).json({ error: 'Benutzer nicht gefunden' });
         }
-        
-        // Statistiken sammeln
+
         db.all(`
             SELECT 
                 (SELECT COUNT(*) FROM message_logs WHERE user_id = ? AND user_id != 'SYSTEM') as message_count,
@@ -683,10 +640,9 @@ router.get('/users/discord/:userId/details', requireAuth(), (req, res) => {
             if (err) {
                 console.error('User stats error:', err);
             }
-            
+
             const userStats = stats[0] || { message_count: 0, ticket_count: 0, voice_channel_count: 0 };
-            
-            // Letzte Aktivitäten
+
             db.all(`
                 SELECT 'message' as type, channel_name, timestamp FROM message_logs 
                 WHERE user_id = ? AND user_id != 'SYSTEM'
@@ -698,7 +654,7 @@ router.get('/users/discord/:userId/details', requireAuth(), (req, res) => {
                 if (err) {
                     console.error('User activities error:', err);
                 }
-                
+
                 res.json({
                     user,
                     stats: userStats,
@@ -709,19 +665,14 @@ router.get('/users/discord/:userId/details', requireAuth(), (req, res) => {
     });
 });
 
-// ========================================
-// MODERATION API - mit Bot-Kommunikation
-// ========================================
-
-// Benutzer kicken
 router.post('/users/discord/:userId/kick', requireAuth('admin'), async (req, res) => {
     const userId = req.params.userId;
     const { reason } = req.body;
-    
+
     try {
         const commandId = await sendCommandToBot('KICK_USER', userId, { reason });
         const result = await waitForCommandResult(commandId);
-        
+
         if (result.success) {
             logWebAction(req.session.user.id, 'KICK_USER', `Benutzer ${userId} gekickt: ${reason || 'Kein Grund angegeben'}`);
             res.json({ success: true, message: result.result });
@@ -734,15 +685,14 @@ router.post('/users/discord/:userId/kick', requireAuth('admin'), async (req, res
     }
 });
 
-// Benutzer bannen
 router.post('/users/discord/:userId/ban', requireAuth('admin'), async (req, res) => {
     const userId = req.params.userId;
     const { reason } = req.body;
-    
+
     try {
         const commandId = await sendCommandToBot('BAN_USER', userId, { reason });
         const result = await waitForCommandResult(commandId);
-        
+
         if (result.success) {
             logWebAction(req.session.user.id, 'BAN_USER', `Benutzer ${userId} gebannt: ${reason || 'Kein Grund angegeben'}`);
             res.json({ success: true, message: result.result });
@@ -755,15 +705,14 @@ router.post('/users/discord/:userId/ban', requireAuth('admin'), async (req, res)
     }
 });
 
-// Benutzer timeout
 router.post('/users/discord/:userId/timeout', requireAuth('admin'), async (req, res) => {
     const userId = req.params.userId;
     const { reason, duration } = req.body;
-    
+
     try {
         const commandId = await sendCommandToBot('TIMEOUT_USER', userId, { reason, duration });
         const result = await waitForCommandResult(commandId);
-        
+
         if (result.success) {
             logWebAction(req.session.user.id, 'TIMEOUT_USER', `Benutzer ${userId} timeout: ${duration}s - ${reason || 'Kein Grund angegeben'}`);
             res.json({ success: true, message: result.result });
@@ -776,24 +725,23 @@ router.post('/users/discord/:userId/timeout', requireAuth('admin'), async (req, 
     }
 });
 
-// Verifikation zurücksetzen
 router.post('/users/discord/:userId/reset-verification', requireAuth('admin'), (req, res) => {
     const userId = req.params.userId;
     const newVerificationCode = crypto.randomBytes(4).toString('hex').toUpperCase();
-    
+
     db.run(`UPDATE users SET verified = 0, verification_code = ? WHERE id = ?`, 
         [newVerificationCode, userId], function(err) {
         if (err) {
             return res.status(500).json({ error: 'Fehler beim Zurücksetzen der Verifikation' });
         }
-        
+
         if (this.changes === 0) {
             return res.status(404).json({ error: 'Benutzer nicht gefunden' });
         }
-        
+
         logWebAction(req.session.user.id, 'RESET_VERIFICATION', 
             `Verifikation für Discord-Benutzer ${userId} zurückgesetzt`);
-        
+
         res.json({ 
             success: true, 
             message: 'Verifikation zurückgesetzt',
@@ -802,29 +750,26 @@ router.post('/users/discord/:userId/reset-verification', requireAuth('admin'), (
     });
 });
 
-// Persönlichen Channel löschen
 router.post('/users/discord/:userId/delete-channel', requireAuth('admin'), (req, res) => {
     const userId = req.params.userId;
-    
-    // Hole Channel-ID aus der Datenbank
+
     db.get(`SELECT personal_channel_id FROM users WHERE id = ?`, [userId], (err, user) => {
         if (err) {
             return res.status(500).json({ error: 'Datenbankfehler' });
         }
-        
+
         if (!user || !user.personal_channel_id) {
             return res.json({ success: true, message: 'Kein persönlicher Channel vorhanden' });
         }
-        
-        // Entferne Channel-Referenz aus Datenbank
+
         db.run(`UPDATE users SET personal_channel_id = NULL WHERE id = ?`, [userId], function(err) {
             if (err) {
                 return res.status(500).json({ error: 'Fehler beim Löschen der Channel-Referenz' });
             }
-            
+
             logWebAction(req.session.user.id, 'DELETE_PERSONAL_CHANNEL', 
                 `Persönlicher Channel für Discord-Benutzer ${userId} entfernt`);
-            
+
             res.json({ 
                 success: true, 
                 message: 'Channel-Referenz entfernt (Discord-Channel muss manuell gelöscht werden)'
@@ -833,33 +778,28 @@ router.post('/users/discord/:userId/delete-channel', requireAuth('admin'), (req,
     });
 });
 
-// ========================================
-// WEB-BENUTZER API
-// ========================================
-
-// Web-Benutzer Passwort zurücksetzen
 router.post('/users/web/:userId/reset-password', requireAuth('admin'), async (req, res) => {
     const userId = req.params.userId;
     const { newPassword } = req.body;
-    
+
     if (!newPassword || newPassword.length < 6) {
         return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
     }
-    
+
     try {
         const passwordHash = await bcrypt.hash(newPassword, 12);
-        
+
         db.run(`UPDATE web_users SET password_hash = ? WHERE id = ?`, [passwordHash, userId], function(err) {
             if (err) {
                 return res.status(500).json({ error: 'Fehler beim Passwort-Update' });
             }
-            
+
             if (this.changes === 0) {
                 return res.status(404).json({ error: 'Benutzer nicht gefunden' });
             }
-            
+
             logWebAction(req.session.user.id, 'RESET_PASSWORD', `Passwort für Web-Benutzer ${userId} zurückgesetzt`);
-            
+
             res.json({ success: true, message: 'Passwort erfolgreich zurückgesetzt' });
         });
     } catch (error) {
@@ -868,22 +808,21 @@ router.post('/users/web/:userId/reset-password', requireAuth('admin'), async (re
     }
 });
 
-// Unique Password regenerieren
 router.post('/users/web/:userId/regenerate-unique', requireAuth('admin'), (req, res) => {
     const userId = req.params.userId;
     const newUniquePassword = crypto.randomBytes(6).toString('hex').toUpperCase();
-    
+
     db.run(`UPDATE web_users SET unique_password = ? WHERE id = ?`, [newUniquePassword, userId], function(err) {
         if (err) {
             return res.status(500).json({ error: 'Fehler beim Update' });
         }
-        
+
         if (this.changes === 0) {
             return res.status(404).json({ error: 'Benutzer nicht gefunden' });
         }
-        
+
         logWebAction(req.session.user.id, 'REGENERATE_UNIQUE_PASSWORD', `Unique Password für Web-Benutzer ${userId} regeneriert`);
-        
+
         res.json({ 
             success: true, 
             message: 'Unique Password regeneriert',
@@ -892,44 +831,42 @@ router.post('/users/web/:userId/regenerate-unique', requireAuth('admin'), (req, 
     });
 });
 
-// Web-Benutzer Rolle ändern
 router.post('/users/web/:userId/change-role', requireAuth('admin'), (req, res) => {
     const userId = req.params.userId;
     const { newRole } = req.body;
-    
+
     if (!['admin', 'mod'].includes(newRole)) {
         return res.status(400).json({ error: 'Ungültige Rolle' });
     }
-    
-    // Verhindere dass der letzte Admin seine Rolle ändert
+
     if (newRole === 'mod') {
         db.get(`SELECT COUNT(*) as admin_count FROM web_users WHERE role = 'admin'`, (err, result) => {
             if (err) {
                 return res.status(500).json({ error: 'Datenbankfehler' });
             }
-            
+
             if (result.admin_count <= 1) {
                 return res.status(400).json({ error: 'Mindestens ein Administrator muss vorhanden bleiben' });}
-            
+
             updateUserRole();
         });
     } else {
         updateUserRole();
     }
-    
+
     function updateUserRole() {
         db.run(`UPDATE web_users SET role = ? WHERE id = ?`, [newRole, userId], function(err) {
             if (err) {
                 return res.status(500).json({ error: 'Fehler beim Ändern der Rolle' });
             }
-            
+
             if (this.changes === 0) {
                 return res.status(404).json({ error: 'Benutzer nicht gefunden' });
             }
-            
+
             logWebAction(req.session.user.id, 'CHANGE_ROLE', 
                 `Rolle für Web-Benutzer ${userId} zu ${newRole} geändert`);
-            
+
             res.json({ 
                 success: true, 
                 message: `Rolle erfolgreich zu ${newRole} geändert`
@@ -938,34 +875,31 @@ router.post('/users/web/:userId/change-role', requireAuth('admin'), (req, res) =
     }
 });
 
-// Web-Benutzer löschen
 router.delete('/users/web/:userId', requireAuth('admin'), (req, res) => {
     const userId = req.params.userId;
-    
-    // Verhindere Selbstlöschung
+
     if (parseInt(userId) === req.session.user.id) {
         return res.status(400).json({ error: 'Du kannst dich nicht selbst löschen' });
     }
-    
+
     db.run(`DELETE FROM web_users WHERE id = ?`, [userId], function(err) {
         if (err) {
             return res.status(500).json({ error: 'Fehler beim Löschen' });
         }
-        
+
         if (this.changes === 0) {
             return res.status(404).json({ error: 'Benutzer nicht gefunden' });
         }
-        
+
         logWebAction(req.session.user.id, 'DELETE_WEB_USER', `Web-Benutzer ${userId} gelöscht`);
-        
+
         res.json({ success: true, message: 'Benutzer erfolgreich gelöscht' });
     });
 });
 
-// Web-Benutzer Aktivitäts-Logs
 router.get('/users/web/:userId/logs', requireAuth('admin'), (req, res) => {
     const userId = req.params.userId;
-    
+
     db.all(`
         SELECT * FROM web_logs 
         WHERE user_id = ? 
@@ -975,20 +909,18 @@ router.get('/users/web/:userId/logs', requireAuth('admin'), (req, res) => {
         if (err) {
             return res.status(500).json({ error: 'Fehler beim Laden der Logs' });
         }
-        
+
         res.json({ logs: logs || [] });
     });
 });
 
-// Benutzer suchen (für Live-Search)
 router.get('/users/search', requireAuth(), (req, res) => {
     const query = req.query.q;
-    
+
     if (!query || query.length < 2) {
         return res.json({ discord: [], web: [] });
     }
-    
-    // Suche Discord-Benutzer
+
     db.all(`
         SELECT * FROM users 
         WHERE username LIKE ? OR id LIKE ? 
@@ -998,8 +930,7 @@ router.get('/users/search', requireAuth(), (req, res) => {
             console.error('Discord user search error:', err);
             discordUsers = [];
         }
-        
-        // Suche Web-Benutzer
+
         db.all(`
             SELECT id, username, role, created_at FROM web_users 
             WHERE username LIKE ? 
@@ -1009,7 +940,7 @@ router.get('/users/search', requireAuth(), (req, res) => {
                 console.error('Web user search error:', err);
                 webUsers = [];
             }
-            
+
             res.json({
                 discord: discordUsers || [],
                 web: webUsers || []
@@ -1018,13 +949,11 @@ router.get('/users/search', requireAuth(), (req, res) => {
     });
 });
 
-// Sessions für einen Web-Benutzer abrufen
 router.get('/users/web/:userId/sessions', requireAuth('admin'), (req, res) => {
     const userId = req.params.userId;
-    
-    // Hole aktuelle Session ID
+
     const currentSessionId = req.sessionID;
-    
+
     db.all(`
         SELECT 
             session_id,
@@ -1041,9 +970,9 @@ router.get('/users/web/:userId/sessions', requireAuth('admin'), (req, res) => {
             console.error('Sessions query error:', err);
             return res.status(500).json({ error: 'Fehler beim Laden der Sessions' });
         }
-        
+
         logWebAction(req.session.user.id, 'VIEW_USER_SESSIONS', `Sessions für Benutzer ${userId} angezeigt`);
-        
+
         res.json({ 
             success: true,
             sessions: sessions || []
@@ -1051,17 +980,15 @@ router.get('/users/web/:userId/sessions', requireAuth('admin'), (req, res) => {
     });
 });
 
-// Einzelne Session beenden
 router.post('/users/web/:userId/sessions/:sessionId/terminate', requireAuth('admin'), (req, res) => {
     const userId = req.params.userId;
     const sessionId = req.params.sessionId;
     const currentSessionId = req.sessionID;
-    
-    // Verhindere dass die aktuelle Session beendet wird
+
     if (sessionId === currentSessionId) {
         return res.status(400).json({ error: 'Die aktuelle Session kann nicht beendet werden' });
     }
-    
+
     db.run(`
         UPDATE user_sessions 
         SET expires_at = datetime('now') 
@@ -1071,14 +998,14 @@ router.post('/users/web/:userId/sessions/:sessionId/terminate', requireAuth('adm
             console.error('Terminate session error:', err);
             return res.status(500).json({ error: 'Fehler beim Beenden der Session' });
         }
-        
+
         if (this.changes === 0) {
             return res.status(404).json({ error: 'Session nicht gefunden' });
         }
-        
+
         logWebAction(req.session.user.id, 'TERMINATE_USER_SESSION', 
             `Session ${sessionId} für Benutzer ${userId} beendet`);
-        
+
         res.json({ 
             success: true, 
             message: 'Session erfolgreich beendet'
@@ -1086,11 +1013,10 @@ router.post('/users/web/:userId/sessions/:sessionId/terminate', requireAuth('adm
     });
 });
 
-// Alle anderen Sessions beenden
 router.post('/users/web/:userId/sessions/terminate-others', requireAuth('admin'), (req, res) => {
     const userId = req.params.userId;
     const currentSessionId = req.sessionID;
-    
+
     db.run(`
         UPDATE user_sessions 
         SET expires_at = datetime('now') 
@@ -1100,10 +1026,10 @@ router.post('/users/web/:userId/sessions/terminate-others', requireAuth('admin')
             console.error('Terminate other sessions error:', err);
             return res.status(500).json({ error: 'Fehler beim Beenden der Sessions' });
         }
-        
+
         logWebAction(req.session.user.id, 'TERMINATE_OTHER_USER_SESSIONS', 
             `${this.changes} Sessions für Benutzer ${userId} beendet`);
-        
+
         res.json({ 
             success: true, 
             message: `${this.changes} Sessions beendet`,
@@ -1112,18 +1038,13 @@ router.post('/users/web/:userId/sessions/terminate-others', requireAuth('admin')
     });
 });
 
-// ========================================
-// NACHRICHTEN API
-// ========================================
-
-// Suche in Nachrichten (AJAX)
 router.get('/messages/search', requireAuth(), (req, res) => {
     const query = req.query.q;
-    
+
     if (!query || query.length < 2) {
         return res.json([]);
     }
-    
+
     db.all(`
         SELECT * FROM message_logs 
         WHERE content LIKE ? OR username LIKE ? 
@@ -1134,18 +1055,13 @@ router.get('/messages/search', requireAuth(), (req, res) => {
             console.error('Message search error:', err);
             return res.json([]);
         }
-        
+
         res.json(messages || []);
     });
 });
 
-// ========================================
-// BOT STATUS & COMMUNICATION API
-// ========================================
-
-// Bot Status prüfen
 router.get('/bot/status', requireAuth(), (req, res) => {
-    // Prüfe letzte Bot-Aktivität
+
     db.get(`
         SELECT * FROM bot_commands 
         WHERE status IN ('completed', 'failed') 
@@ -1155,15 +1071,13 @@ router.get('/bot/status', requireAuth(), (req, res) => {
         if (err) {
             return res.status(500).json({ error: 'Datenbankfehler' });
         }
-        
+
         const now = new Date();
         const lastActivity = lastCommand ? new Date(lastCommand.executed_at) : null;
         const timeSinceLastActivity = lastActivity ? (now - lastActivity) / 1000 : null;
-        
-        // Bot gilt als online wenn letzte Aktivität < 60 Sekunden
+
         const botOnline = timeSinceLastActivity !== null && timeSinceLastActivity < 60;
-        
-        // Prüfe auch Nachrichten-Aktivität
+
         db.get(`
             SELECT timestamp FROM message_logs 
             ORDER BY timestamp DESC 
@@ -1171,7 +1085,7 @@ router.get('/bot/status', requireAuth(), (req, res) => {
         `, (err, lastMessage) => {
             const lastMessageTime = lastMessage ? new Date(lastMessage.timestamp) : null;
             const messageTimeDiff = lastMessageTime ? (now - lastMessageTime) / 1000 : null;
-            
+
             res.json({
                 online: botOnline,
                 last_activity: lastActivity,
@@ -1188,7 +1102,6 @@ router.get('/bot/status', requireAuth(), (req, res) => {
     });
 });
 
-// Pending Commands anzeigen
 router.get('/bot/commands', requireAuth('admin'), (req, res) => {
     db.all(`
         SELECT * FROM bot_commands 
@@ -1198,39 +1111,37 @@ router.get('/bot/commands', requireAuth('admin'), (req, res) => {
         if (err) {
             return res.status(500).json({ error: 'Datenbankfehler' });
         }
-        
+
         res.json({ commands });
     });
 });
 
-// Command manuell als failed markieren (falls Bot hängt)
 router.post('/bot/commands/:commandId/cancel', requireAuth('admin'), (req, res) => {
     const commandId = req.params.commandId;
-    
+
     db.run(`UPDATE bot_commands SET status = 'cancelled', executed_at = ?, result = ? WHERE id = ? AND status = 'pending'`,
         [new Date().toISOString(), 'Manuell abgebrochen über Web-Interface', commandId],
         function(err) {
             if (err) {
                 return res.status(500).json({ error: 'Datenbankfehler' });
             }
-            
+
             if (this.changes === 0) {
                 return res.status(404).json({ error: 'Command nicht gefunden oder bereits ausgeführt' });
             }
-            
+
             logWebAction(req.session.user.id, 'CANCEL_COMMAND', `Command ${commandId} manuell abgebrochen`);
             res.json({ success: true, message: 'Command abgebrochen' });
         }
     );
 });
 
-// Test Command senden
 router.post('/bot/test', requireAuth('admin'), async (req, res) => {
     try {
         const commandId = await sendCommandToBot('TEST', 'test-target', { message: 'Test vom Web-Interface' });
-        
+
         logWebAction(req.session.user.id, 'TEST_COMMAND', `Test-Command ${commandId} gesendet`);
-        
+
         res.json({ 
             success: true, 
             message: 'Test-Command gesendet',
@@ -1242,11 +1153,6 @@ router.post('/bot/test', requireAuth('admin'), async (req, res) => {
     }
 });
 
-// ========================================
-// SYSTEM API ENDPUNKTE
-// ========================================
-
-// System Status
 router.get('/system/status', requireAuth(), (req, res) => {
     db.all(`
         SELECT 
@@ -1260,7 +1166,7 @@ router.get('/system/status', requireAuth(), (req, res) => {
         if (err) {
             return res.status(500).json({ error: 'Fehler beim Laden der System-Statistiken' });
         }
-        
+
         const systemInfo = {
             stats: stats[0] || {},
             uptime: process.uptime(),
@@ -1268,37 +1174,34 @@ router.get('/system/status', requireAuth(), (req, res) => {
             version: '1.1.0',
             environment: process.env.NODE_ENV || 'development'
         };
-        
+
         res.json(systemInfo);
     });
 });
 
-// Database Health Check
 router.get('/system/health', requireAuth('admin'), (req, res) => {
     const healthChecks = [];
-    
-    // Teste Datenbank-Verbindung
+
     db.get(`SELECT COUNT(*) as count FROM sqlite_master WHERE type='table'`, (err, result) => {
         if (err) {
             healthChecks.push({ name: 'database', status: 'error', message: err.message });
         } else {
             healthChecks.push({ name: 'database', status: 'ok', tables: result.count });
         }
-        
-        // Teste wichtige Tabellen
+
         const requiredTables = ['users', 'message_logs', 'tickets', 'web_users', 'web_logs', 'temp_channels', 'bot_commands'];
         let tablesChecked = 0;
-        
+
         requiredTables.forEach(tableName => {
             db.get(`SELECT COUNT(*) as count FROM ${tableName}`, (err, result) => {
                 tablesChecked++;
-                
+
                 if (err) {
                     healthChecks.push({ name: tableName, status: 'error', message: err.message });
                 } else {
                     healthChecks.push({ name: tableName, status: 'ok', rows: result.count });
                 }
-                
+
                 if (tablesChecked === requiredTables.length) {
                     res.json({
                         status: healthChecks.every(check => check.status === 'ok') ? 'healthy' : 'unhealthy',
@@ -1311,49 +1214,48 @@ router.get('/system/health', requireAuth('admin'), (req, res) => {
     });
 });
 
-// Export Data (nur Admin)
 router.get('/system/export/:type', requireAuth('admin'), (req, res) => {
     const exportType = req.params.type;
-    
+
     logWebAction(req.session.user.id, 'EXPORT_DATA', `Daten-Export: ${exportType}`);
-    
+
     switch (exportType) {
         case 'messages':
             db.all(`SELECT * FROM message_logs ORDER BY timestamp DESC`, (err, data) => {
                 if (err) {
                     return res.status(500).json({ error: 'Fehler beim Export' });
                 }
-                
+
                 res.setHeader('Content-Type', 'application/json');
                 res.setHeader('Content-Disposition', `attachment; filename="messages_export_${Date.now()}.json"`);
                 res.json(data);
             });
             break;
-            
+
         case 'users':
             db.all(`SELECT * FROM users ORDER BY joined_at DESC`, (err, data) => {
                 if (err) {
                     return res.status(500).json({ error: 'Fehler beim Export' });
                 }
-                
+
                 res.setHeader('Content-Type', 'application/json');
                 res.setHeader('Content-Disposition', `attachment; filename="users_export_${Date.now()}.json"`);
                 res.json(data);
             });
             break;
-            
+
         case 'tickets':
             db.all(`SELECT * FROM tickets ORDER BY created_at DESC`, (err, data) => {
                 if (err) {
                     return res.status(500).json({ error: 'Fehler beim Export' });
                 }
-                
+
                 res.setHeader('Content-Type', 'application/json');
                 res.setHeader('Content-Disposition', `attachment; filename="tickets_export_${Date.now()}.json"`);
                 res.json(data);
             });
             break;
-            
+
         case 'logs':
             db.all(`
                 SELECT wl.*, wu.username 
@@ -1364,46 +1266,45 @@ router.get('/system/export/:type', requireAuth('admin'), (req, res) => {
                 if (err) {
                     return res.status(500).json({ error: 'Fehler beim Export' });
                 }
-                
+
                 res.setHeader('Content-Type', 'application/json');
                 res.setHeader('Content-Disposition', `attachment; filename="web_logs_export_${Date.now()}.json"`);
                 res.json(data);
             });
             break;
-            
+
         case 'bot_commands':
             db.all(`SELECT * FROM bot_commands ORDER BY created_at DESC`, (err, data) => {
                 if (err) {
                     return res.status(500).json({ error: 'Fehler beim Export' });
                 }
-                
+
                 res.setHeader('Content-Type', 'application/json');
                 res.setHeader('Content-Disposition', `attachment; filename="bot_commands_export_${Date.now()}.json"`);
                 res.json(data);
             });
             break;
-            
+
         default:
             res.status(400).json({ error: 'Unbekannter Export-Typ' });
     }
 });
 
-// Datenbankstatistiken
 router.get('/system/database/stats', requireAuth('admin'), (req, res) => {
     const stats = {};
     const tables = ['users', 'message_logs', 'tickets', 'web_users', 'web_logs', 'temp_channels', 'bot_commands'];
     let completed = 0;
-    
+
     tables.forEach(table => {
         db.get(`SELECT COUNT(*) as count FROM ${table}`, (err, result) => {
             completed++;
-            
+
             if (err) {
                 stats[table] = { error: err.message };
             } else {
                 stats[table] = { count: result.count };
             }
-            
+
             if (completed === tables.length) {
                 res.json({
                     success: true,
@@ -1415,42 +1316,39 @@ router.get('/system/database/stats', requireAuth('admin'), (req, res) => {
     });
 });
 
-// Datenbankbereinigung (nur Admin)
 router.post('/system/database/cleanup', requireAuth('admin'), (req, res) => {
     const { days = 30 } = req.body;
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
     const cutoffISO = cutoffDate.toISOString();
-    
+
     let cleanupTasks = 0;
     let completedTasks = 0;
     const results = {};
-    
-    // Lösche alte Web-Logs
+
     cleanupTasks++;
     db.run(`DELETE FROM web_logs WHERE timestamp < ?`, [cutoffISO], function(err) {
         completedTasks++;
         results.web_logs = err ? { error: err.message } : { deleted: this.changes };
-        
+
         if (completedTasks === cleanupTasks) {
             finishCleanup();
         }
     });
-    
-    // Lösche alte Bot-Commands
+
     cleanupTasks++;
     db.run(`DELETE FROM bot_commands WHERE created_at < ? AND status IN ('completed', 'failed', 'cancelled')`, [cutoffISO], function(err) {
         completedTasks++;
         results.bot_commands = err ? { error: err.message } : { deleted: this.changes };
-        
+
         if (completedTasks === cleanupTasks) {
             finishCleanup();
         }
     });
-    
+
     function finishCleanup() {
         logWebAction(req.session.user.id, 'DATABASE_CLEANUP', `Datenbankbereinigung durchgeführt: ${days} Tage`);
-        
+
         res.json({
             success: true,
             message: `Datenbankbereinigung abgeschlossen (${days} Tage)`,
@@ -1460,11 +1358,6 @@ router.post('/system/database/cleanup', requireAuth('admin'), (req, res) => {
     }
 });
 
-// ========================================
-// ERROR HANDLING
-// ========================================
-
-// 404 Handler für API
 router.use('*', (req, res) => {
     res.status(404).json({ 
         error: 'API-Endpunkt nicht gefunden',

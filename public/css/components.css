@@ -1,12 +1,3 @@
-/* ========================================
-   14TH SQUAD - COMPONENTS CSS
-   Buttons, Cards, Forms, Badges, etc.
-   ======================================== */
-
-/* ========================================
-   BUTTONS
-   ======================================== */
-
 .btn {
     display: inline-block;
     font-weight: 600;
@@ -38,7 +29,6 @@
     pointer-events: none;
 }
 
-/* Primary Squad Button */
 .btn-squad {
     background: linear-gradient(45deg, var(--primary-pink), var(--secondary-pink));
     border: none;
@@ -76,7 +66,6 @@
     text-decoration: none;
 }
 
-/* Button Variants */
 .btn-outline-primary {
     color: var(--primary-pink);
     border-color: var(--primary-pink);
@@ -154,7 +143,6 @@
     box-shadow: 0 0 20px var(--info-glow);
 }
 
-/* Button Sizes */
 .btn-sm {
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-sm);
@@ -167,7 +155,6 @@
     border-radius: var(--border-radius-lg);
 }
 
-/* Button Groups */
 .btn-group {
     position: relative;
     display: inline-flex;
@@ -189,10 +176,6 @@
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
 }
-
-/* ========================================
-   CARDS
-   ======================================== */
 
 .card {
     position: relative;
@@ -272,7 +255,6 @@
     margin-bottom: 0;
 }
 
-/* Statistics Cards */
 .stat-card {
     text-align: center;
     border-left: 4px solid var(--primary-pink);
@@ -295,7 +277,6 @@
     letter-spacing: 0.5px;
 }
 
-/* Card Variants */
 .card-success {
     border-left: 4px solid var(--success-color);
     box-shadow: -4px 0 0 var(--success-glow);
@@ -315,10 +296,6 @@
     border-left: 4px solid var(--info-color);
     box-shadow: -4px 0 0 var(--info-glow);
 }
-
-/* ========================================
-   FORMS
-   ======================================== */
 
 .form-control {
     display: block;
@@ -392,7 +369,6 @@
     color: var(--text-muted);
 }
 
-/* Input Groups */
 .input-group {
     position: relative;
     display: flex;
@@ -422,10 +398,6 @@
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
 }
-
-/* ========================================
-   BADGES
-   ======================================== */
 
 .badge {
     display: inline-block;
@@ -472,10 +444,6 @@
     background: linear-gradient(45deg, var(--text-muted), #666666) !important;
 }
 
-/* ========================================
-   ALERTS
-   ======================================== */
-
 .alert {
     position: relative;
     padding: var(--spacing-md) var(--spacing-lg);
@@ -509,10 +477,6 @@
     color: var(--text-primary);
 }
 
-/* ========================================
-   PROGRESS BARS
-   ======================================== */
-
 .progress {
     display: flex;
     height: 1rem;
@@ -533,10 +497,6 @@
     background-color: var(--primary-pink);
     transition: width 0.6s ease;
 }
-
-/* ========================================
-   TOOLTIPS (Basic)
-   ======================================== */
 
 .tooltip {
     position: relative;
@@ -565,10 +525,6 @@
 .tooltip:hover::before {
     opacity: 1;
 }
-
-/* ========================================
-   MODALS (Bootstrap Override)
-   ======================================== */
 
 .modal-content {
     background: var(--secondary-bg);
@@ -616,10 +572,6 @@
     color: white;
 }
 
-/* ========================================
-   TABLES (Bootstrap Override)
-   ======================================== */
-
 .table {
     --bs-table-bg: transparent;
     --bs-table-striped-bg: rgba(255, 255, 255, 0.02);
@@ -652,10 +604,6 @@
     background: rgba(255, 0, 102, 0.075);
     box-shadow: inset 3px 0 0 var(--primary-pink);
 }
-
-/* ========================================
-   PAGINATION
-   ======================================== */
 
 .pagination {
     display: flex;
