@@ -1,0 +1,319 @@
+/* ========================================
+   14TH SQUAD - LOGIN CSS
+   Login Page mit einheitlichem Design
+   ======================================== */
+
+/* Login Page Layout - verwendet 14th Squad Variablen */
+.login-page-layout {
+    background: var(--primary-bg);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+/* Grid Background wie im Rest der Anwendung */
+.login-page-layout::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-image: 
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+    z-index: -2;
+}
+
+/* Animated Background Glow */
+.login-page-layout::after {
+    content: '';
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, var(--glow-pink) 0%, transparent 70%);
+    transform: translate(-50%, -50%);
+    animation: backgroundPulse 4s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+}
+
+@keyframes backgroundPulse {
+    0%, 100% { 
+        opacity: 0.3; 
+        transform: translate(-50%, -50%) scale(1); 
+    }
+    50% { 
+        opacity: 0.1; 
+        transform: translate(-50%, -50%) scale(1.2); 
+    }
+}
+
+/* Login Container - 14th Squad Card Style */
+.login-container {
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: var(--backdrop-blur);
+    border-radius: var(--border-radius-xl);
+    box-shadow: var(--box-shadow-hover);
+    overflow: hidden;
+    max-width: 400px;
+    width: 100%;
+    border: 1px solid var(--border-color);
+    position: relative;
+}
+
+.login-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, var(--primary-pink) 50%, transparent 100%);
+    opacity: 1;
+}
+
+/* Login Header - 14th Squad Header Style */
+.login-header {
+    background: rgba(255, 0, 102, 0.1);
+    border-bottom: 1px solid var(--primary-pink);
+    color: var(--text-primary);
+    text-align: center;
+    padding: var(--spacing-xl);
+}
+
+.login-header h3 {
+    margin: var(--spacing-sm) 0 0 0;
+    font-weight: 700;
+    font-size: var(--font-2xl);
+    font-family: var(--font-heading);
+    color: var(--primary-pink);
+    text-shadow: 0 0 10px var(--glow-pink);
+}
+
+.login-header p {
+    margin: var(--spacing-sm) 0 0 0;
+    opacity: 0.9;
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Discord Icon - 14th Squad Style */
+.discord-icon {
+    font-size: var(--font-3xl);
+    margin-bottom: var(--spacing-sm);
+    color: var(--primary-pink);
+    text-shadow: 0 0 15px var(--glow-pink);
+    animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+    0% { text-shadow: 0 0 15px var(--glow-pink); }
+    100% { text-shadow: 0 0 25px var(--glow-pink), 0 0 35px var(--primary-pink); }
+}
+
+/* Login Body */
+.login-body {
+    padding: var(--spacing-xl);
+    background: var(--secondary-bg);
+}
+
+/* Form Controls - 14th Squad Style */
+.form-control {
+    background: var(--accent-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    font-size: var(--font-base);
+    color: var(--text-primary);
+    transition: all var(--transition-fast);
+}
+
+.form-control:focus {
+    background: var(--accent-bg);
+    border-color: var(--primary-pink);
+    color: var(--text-primary);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem var(--glow-pink);
+}
+
+.form-control::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
+}
+
+/* Form Labels - 14th Squad Style */
+.form-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-xs);
+    font-size: var(--font-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.form-label i {
+    color: var(--primary-pink);
+}
+
+/* Login Button - 14th Squad Squad Button Style */
+.btn-login {
+    background: linear-gradient(45deg, var(--primary-pink), var(--secondary-pink));
+    border: none;
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    font-weight: 600;
+    width: 100%;
+    color: white;
+    font-size: var(--font-base);
+    transition: all var(--transition-normal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: var(--font-heading);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-login::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    transition: all 0.4s ease;
+    transform: translate(-50%, -50%);
+}
+
+.btn-login:hover::before {
+    width: 300px;
+    height: 300px;
+}
+
+.btn-login:hover {
+    box-shadow: 0 8px 25px var(--glow-pink);
+    transform: translateY(-2px);
+    color: white;
+}
+
+.btn-login:active {
+    transform: translateY(0);
+}
+
+/* Alerts - 14th Squad Style */
+.alert {
+    border-radius: var(--border-radius);
+    border: none;
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.alert-danger {
+    background: rgba(255, 0, 102, 0.1);
+    border-color: var(--primary-pink);
+    color: var(--text-primary);
+    border-left: 4px solid var(--primary-pink);
+}
+
+.alert i {
+    font-size: var(--font-lg);
+    color: var(--primary-pink);
+}
+
+/* Unique Password Info - 14th Squad Info Style */
+.unique-password-info {
+    background: rgba(255, 170, 0, 0.1);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    margin-top: var(--spacing-md);
+    border-left: 4px solid var(--warning-color);
+    border: 1px solid rgba(255, 170, 0, 0.3);
+}
+
+.unique-password-info strong {
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+    font-family: var(--font-heading);
+}
+
+.unique-password-info strong i {
+    color: var(--warning-color);
+}
+
+.unique-password-info small {
+    color: var(--text-secondary);
+    line-height: 1.4;
+    font-size: var(--font-xs);
+}
+
+/* Form Groups */
+.mb-3 {
+    margin-bottom: var(--spacing-md);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .login-container {
+        margin: var(--spacing-md);
+        max-width: none;
+    }
+    
+    .login-header {
+        padding: var(--spacing-lg);
+    }
+    
+    .login-body {
+        padding: var(--spacing-lg);
+    }
+    
+    .discord-icon {
+        font-size: var(--font-2xl);
+    }
+    
+    .login-header h3 {
+        font-size: var(--font-xl);
+    }
+}
+
+@media (max-width: 480px) {
+    .login-container {
+        margin: var(--spacing-sm);
+    }
+    
+    .login-header {
+        padding: var(--spacing-md);
+    }
+    
+    .login-body {
+        padding: var(--spacing-md);
+    }
+    
+    .form-control {
+        padding: var(--spacing-sm);
+    }
+    
+    .btn-login {
+        padding: var(--spacing-sm);
+    }
+}

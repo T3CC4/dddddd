@@ -1,0 +1,320 @@
+/* ========================================
+   14TH SQUAD - ERROR CSS
+   Error Page mit einheitlichem Design
+   ======================================== */
+
+/* Error Page Layout - verwendet 14th Squad Variablen */
+.error-page-layout {
+    background: var(--primary-bg);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    position: relative;
+}
+
+/* Grid Background wie im Rest der Anwendung */
+.error-page-layout::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-image: 
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+    z-index: -2;
+}
+
+/* Animated Background Glow */
+.error-page-layout::after {
+    content: '';
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, var(--glow-pink) 0%, transparent 70%);
+    transform: translate(-50%, -50%);
+    animation: backgroundPulse 4s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+}
+
+@keyframes backgroundPulse {
+    0%, 100% { 
+        opacity: 0.3; 
+        transform: translate(-50%, -50%) scale(1); 
+    }
+    50% { 
+        opacity: 0.1; 
+        transform: translate(-50%, -50%) scale(1.2); 
+    }
+}
+
+/* Error Container - wie 14th Squad Cards */
+.error-container {
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: var(--backdrop-blur);
+    border-radius: var(--border-radius-xl);
+    padding: var(--spacing-xxl);
+    text-align: center;
+    max-width: 500px;
+    width: 100%;
+    box-shadow: var(--box-shadow-hover);
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+}
+
+.error-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, var(--primary-pink) 50%, transparent 100%);
+    opacity: 1;
+}
+
+/* Error Header with Icon */
+.error-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.error-icon {
+    font-size: 4rem;
+    color: var(--danger-color);
+    animation: bounce 2s infinite;
+    text-shadow: 0 0 20px var(--danger-glow);
+}
+
+.error-code {
+    font-size: 6rem;
+    font-weight: 900;
+    color: var(--primary-pink);
+    text-shadow: 0 0 30px var(--glow-pink);
+    line-height: 1;
+    font-family: var(--font-heading);
+    margin: 0;
+}
+
+/* Error Message */
+.error-message {
+    font-size: var(--font-xl);
+    margin-bottom: var(--spacing-xl);
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+/* Error Details */
+.error-details {
+    background: rgba(255, 0, 102, 0.1);
+    border: 1px solid rgba(255, 0, 102, 0.3);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-xl);
+    font-family: var(--font-mono);
+    font-size: var(--font-sm);
+    color: var(--primary-pink);
+    word-wrap: break-word;
+    text-align: left;
+}
+
+/* Button Container */
+.error-buttons {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: var(--spacing-xl);
+}
+/* Buttons - 14th Squad Style */
+.btn-home {
+    background: linear-gradient(45deg, var(--primary-pink), var(--secondary-pink));
+    border: none;
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md) var(--spacing-xl);
+    font-weight: 600;
+    color: white;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    transition: all var(--transition-normal);
+    font-size: var(--font-base);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: var(--font-heading);
+    position: relative;
+    overflow: hidden;
+    min-height: 44px;
+}
+
+.btn-home::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    transition: all 0.4s ease;
+    transform: translate(-50%, -50%);
+}
+
+.btn-home:hover::before {
+    width: 300px;
+    height: 300px;
+}
+
+.btn-home:hover {
+    box-shadow: 0 8px 25px var(--glow-pink);
+    transform: translateY(-2px);
+    color: white;
+    text-decoration: none;
+}
+
+.btn-back {
+    background: transparent;
+    border: 1px solid var(--text-muted);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md) var(--spacing-xl);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    transition: all var(--transition-normal);
+    font-size: var(--font-base);
+    min-height: 44px;
+}
+
+.btn-back:hover {
+    background: var(--text-muted);
+    color: var(--primary-bg);
+    transform: translateY(-2px);
+    text-decoration: none;
+}
+
+/* Error Suggestions - 14th Squad Card Style */
+.error-suggestions {
+    text-align: left;
+    margin-top: var(--spacing-xl);
+    padding: var(--spacing-md);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+}
+
+.error-suggestions h6 {
+    color: var(--warning-color);
+    margin-bottom: var(--spacing-md);
+    font-size: var(--font-base);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-family: var(--font-heading);
+}
+
+.error-suggestions ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.error-suggestions li {
+    margin: var(--spacing-sm) 0;
+    color: var(--text-secondary);
+    font-size: var(--font-sm);
+    line-height: 1.4;
+}
+
+.error-suggestions li:before {
+    content: "→ ";
+    color: var(--primary-pink);
+    font-weight: bold;
+    margin-right: var(--spacing-xs);
+}
+
+/* Footer Text */
+.error-footer {
+    margin-top: var(--spacing-lg);
+    color: var(--text-muted);
+    font-size: var(--font-sm);
+    font-family: var(--font-heading);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .error-container {
+        padding: var(--spacing-xl);
+        margin: var(--spacing-md);
+        border-radius: var(--border-radius-lg);
+    }
+    
+    .error-header {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+    
+    .error-code {
+        font-size: 4rem;
+    }
+    
+    .error-icon {
+        font-size: 3rem;
+    }
+    
+    .error-message {
+        font-size: var(--font-lg);
+    }
+    
+    .error-buttons {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .btn-home,
+    .btn-back {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .error-suggestions {
+        text-align: center;
+    }
+    
+    .error-suggestions ul {
+        text-align: left;
+    }
+}
+
+@media (max-width: 480px) {
+    .error-container {
+        padding: var(--spacing-lg);
+    }
+    
+    .error-code {
+        font-size: 3rem;
+    }
+    
+    .error-icon {
+        font-size: 2.5rem;
+    }
+}

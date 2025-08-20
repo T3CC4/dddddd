@@ -1,0 +1,71 @@
+/* ========================================
+   14TH SQUAD - LOGS CSS
+   Logs-spezifische Styles (Duplikate entfernt)
+   ======================================== */
+
+/* Action Badges - Log spezifische Styling */
+.action-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--border-radius);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: var(--font-heading);
+    white-space: nowrap;
+}
+
+/* Log Details - spezifische Hover-Behandlung */
+.log-details {
+    max-width: 400px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    transition: all var(--transition-normal);
+}
+
+.log-details:hover {
+    white-space: normal;
+    overflow: visible;
+    word-wrap: break-word;
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius-sm);
+    position: relative;
+    z-index: 10;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    max-width: none;
+}
+
+/* Log Row spezifische Hover-Effekte */
+.log-row {
+    transition: all 0.2s ease;
+}
+
+.log-row:hover {
+    background-color: rgba(255, 0, 102, 0.075);
+    transform: translateX(2px);
+}
+
+/* Mobile Responsive - Log spezifisch */
+@media (max-width: 768px) {
+    .log-details {
+        max-width: 200px;
+        font-size: 0.8rem;
+    }
+    
+    th, td {
+        padding: var(--spacing-sm) var(--spacing-xs);
+    }
+}
+
+@media (max-width: 480px) {
+    .log-details {
+        max-width: 150px;
+    }
+}

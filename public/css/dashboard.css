@@ -1,0 +1,60 @@
+/* ========================================
+   14TH SQUAD - DASHBOARD CSS
+   Dashboard-spezifische Styles (Duplikate entfernt)
+   ======================================== */
+
+/* Statistics Border Variants - erweitert für Dashboard */
+.border-left-primary { 
+    border-left: 4px solid var(--primary-pink) !important; 
+    box-shadow: -4px 0 0 var(--glow-pink);
+}
+
+.border-left-success { 
+    border-left: 4px solid var(--success-color) !important; 
+    box-shadow: -4px 0 0 var(--success-glow);
+}
+
+.border-left-info { 
+    border-left: 4px solid var(--info-color) !important; 
+    box-shadow: -4px 0 0 var(--info-glow);
+}
+
+.border-left-warning { 
+    border-left: 4px solid var(--warning-color) !important; 
+    box-shadow: -4px 0 0 var(--warning-glow);
+}
+
+/* Shadow Utilities - spezifisch für Dashboard Stats */
+.shadow {
+    box-shadow: 0 .15rem 1.75rem 0 rgba(58, 59, 69, .15) !important;
+}
+
+/* Activity Footer - Dashboard spezifisch */
+.activity-footer {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--border-radius-sm);
+    padding: var(--spacing-md);
+    margin-top: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+}
+
+.activity-footer .d-flex {
+    gap: var(--spacing-md);
+}
+
+/* Current Time Display - Dashboard spezifisch */
+#current-time {
+    font-family: var(--font-mono);
+    color: var(--primary-pink);
+    text-shadow: 0 0 8px var(--glow-pink);
+    font-weight: 600;
+}
+
+/* Dashboard responsive - spezifische Overrides */
+@media (max-width: 768px) {
+    .activity-footer .d-flex {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+        text-align: center;
+    }
+}

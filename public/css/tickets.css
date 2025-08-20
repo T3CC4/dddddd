@@ -1,0 +1,143 @@
+/* ========================================
+   14TH SQUAD - TICKETS CSS
+   Tickets-spezifische Styles (Duplikate entfernt)
+   ======================================== */
+
+/* Ticket Row States - spezifisch für Ticket-Listen */
+.ticket-open { 
+    background-color: rgba(40, 167, 69, 0.1); 
+    border-left: 3px solid var(--success-color);
+}
+
+.ticket-closed { 
+    background-color: rgba(220, 53, 69, 0.1); 
+    border-left: 3px solid var(--danger-color);
+}
+
+/* Ticket Detail - Discord Message Styling */
+.discord-message {
+    display: flex;
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius-sm);
+    transition: background-color 0.2s ease;
+    border-left: 2px solid transparent;
+}
+
+.discord-message:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+    border-left-color: var(--primary-pink);
+}
+
+.system-message {
+    background-color: rgba(255, 193, 7, 0.1);
+    border-left-color: var(--warning-color);
+}
+
+.deleted-message {
+    opacity: 0.6;
+    background-color: rgba(220, 53, 69, 0.1);
+    border-left-color: var(--danger-color);
+}
+
+/* Message Avatar - Ticket spezifisch */
+.message-avatar {
+    margin-right: var(--spacing-md);
+    flex-shrink: 0;
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+    border: 2px solid var(--border-color);
+}
+
+.user-avatar {
+    background-color: #5865f2;
+    color: white;
+    border-color: #5865f2;
+}
+
+.system-avatar {
+    background-color: var(--warning-color);
+    color: var(--primary-bg);
+    border-color: var(--warning-color);
+}
+
+/* Message Content - Ticket spezifisch */
+.message-content-wrapper {
+    flex: 1;
+    min-width: 0;
+}
+
+.message-header {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: var(--spacing-xs);
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+
+.message-author {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.system-author {
+    color: var(--warning-color);
+}
+
+.message-timestamp {
+    font-size: var(--font-xs);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.message-text {
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    line-height: 1.375;
+    color: var(--text-primary);
+}
+
+.message-attachments {
+    margin-top: var(--spacing-sm);
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--border-radius-sm);
+}
+
+/* Ticket Messages Container */
+.ticket-messages {
+    padding: var(--spacing-md);
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+}
+
+/* Mobile Responsive - Ticket spezifisch */
+@media (max-width: 768px) {
+    .discord-message {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+    
+    .message-avatar {
+        margin-right: 0;
+        align-self: flex-start;
+    }
+    
+    .message-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-xs);
+    }
+}
